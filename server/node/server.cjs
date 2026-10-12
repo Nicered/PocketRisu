@@ -38,6 +38,7 @@ const { createPatchHashCache, decodePointerSegment } = require('./patch-hash-cac
 const { clonePatchSnapshot } = require('./patch-selective-clone.cjs');
 const pluginStorage = require('./plugin-storage-store.cjs');
 const { createAssetManifestStore } = require('./assetManifestStore.cjs');
+const { createAssetView, isRemoteRequest } = require('./assetView.cjs');
 const {
     stripAssetManifests,
     hydrateAssetManifests,
@@ -129,6 +130,10 @@ const assetManifestStore = createAssetManifestStore(sqliteDb, {
     maxCacheBytes: process.env.POCKETRISU_ASSET_MANIFEST_CACHE_BYTES
         ? Number(process.env.POCKETRISU_ASSET_MANIFEST_CACHE_BYTES)
         : undefined,
+});
+const assetView = createAssetView({
+    cacheDir: process.env.POCKETRISU_ASSET_VIEW_DIR || path.join(process.cwd(), 'asset-view-cache'),
+    logger,
 });
 
 // ─── Persist failure tracking (Stage 1 visibility) ───────────────────────────
@@ -407,6 +412,27 @@ function partitionPluginStorageOps(patch) {
 }
 
 // Cold-load database.bin into dbCache (stripped) + fullChatStore. Every
+// Opt-in timing (POCKETRISU_TIMING=1): step durations of slow paths and
+// event-loop stalls go to the server log.
+const timingEnabled = process.env.POCKETRISU_TIMING === '1';
+function coldLoadTimer() {
+    const start = Date.now();
+    let last = start;
+    const steps = [];
+    return {
+        step(label) { const now = Date.now(); steps.push(`${label}=${now - last}ms`); last = now; },
+        done(label) { if (timingEnabled) console.log(`[Timing] ${label} ${Date.now() - start}ms: ${steps.join(' ')}`); },
+    };
+}
+if (timingEnabled) {
+    let lastTick = Date.now();
+    setInterval(() => {
+        const now = Date.now();
+        if (now - lastTick > 1500) console.log(`[Timing] event loop stalled ~${now - lastTick - 500}ms`);
+        lastTick = now;
+    }, 500).unref();
+}
+
 // caller must run this inside queueStorageOperation: /api/read used to decode
 // outside the queue, so a concurrent /api/patch could cold-load, apply and
 // cache first, then be overwritten by the read's older snapshot — losing an
@@ -415,10 +441,19 @@ function partitionPluginStorageOps(patch) {
 // Returns false when there is no blob on disk.
 async function loadDbCacheIfMissing({ createBackup = false } = {}) {
     if (dbCache[DB_HEX_KEY]) return true;
+    const t = coldLoadTimer();
     const raw = kvGet('database/database.bin');
+    t.step('kvGet');
     if (!raw) return false;
-    const dbObj = await initChatStoreFromDisk(await decodeDatabaseWithPersistentChatIds(raw, { createBackup }));
-    dbCache[DB_HEX_KEY] = normalizeJSON(stripDatabaseForClient(dbObj, { reconcileManifests: true }));
+    const decoded = await decodeDatabaseWithPersistentChatIds(raw, { createBackup });
+    t.step('decodeDatabaseWithPersistentChatIds');
+    const dbObj = await initChatStoreFromDisk(decoded);
+    t.step('initChatStoreFromDisk');
+    const stripped = stripDatabaseForClient(dbObj, { reconcileManifests: true });
+    t.step('stripDatabaseForClient');
+    dbCache[DB_HEX_KEY] = normalizeJSON(stripped);
+    t.step('normalizeJSON');
+    t.done('cold load');
     return true;
 }
 
@@ -3936,12 +3971,26 @@ app.get('/api/asset/:hexKey', sessionAuthMiddleware, async (req, res) => {
         if (updatedAt === null) return res.status(404).set('Cache-Control', 'no-store').end()
 
         const etag = `"${updatedAt}"`
-        if (req.headers['if-none-match'] === etag) {
+        const webpEtag = `"${updatedAt}-webp"`
+        if (req.headers['if-none-match'] === etag || req.headers['if-none-match'] === webpEtag) {
             return res.status(304).set('Cache-Control', 'public, max-age=31536000, immutable').end()
         }
 
         const data = kvGet(key)
         if (!data) return res.status(404).set('Cache-Control', 'no-store').end()
+
+        // Remote devices get a smaller WebP copy of PNG/JPEG assets (display only)
+        if (key.startsWith('assets/') && isRemoteRequest(req)) {
+            const view = await assetView.getRemoteView(key, data)
+            if (view) {
+                res.set({
+                    'Content-Type': 'image/webp',
+                    'Cache-Control': 'public, max-age=31536000, immutable',
+                    'ETag': webpEtag,
+                })
+                return res.send(view)
+            }
+        }
 
         const { binary, contentType } = resolveAssetPayload(key, data)
         res.set({
@@ -4081,9 +4130,11 @@ app.get('/api/read', async (req, res, next) => {
     }
     try {
         const key = Buffer.from(filePath, 'hex').toString('utf-8');
+        const readTimer = coldLoadTimer();
         // Flush pending patches before reading database.bin
         if (key === 'database/database.bin') {
             await flushPendingDb();
+            readTimer.step('flushPendingDb');
         }
         let value = null;
         if (key.startsWith('inlay/')) {
@@ -4105,10 +4156,14 @@ app.get('/api/read', async (req, res, next) => {
                     // race a cold /api/patch (see loadDbCacheIfMissing). A
                     // warm cache is served directly without queueing, so a
                     // read can never re-activate a superseded manifest.
+                    readTimer.step('kvGet');
                     if (!dbCache[filePath]) {
                         await queueStorageOperation(() => loadDbCacheIfMissing({ createBackup: true }));
+                        readTimer.step('queue+coldLoad');
                     }
                     value = Buffer.from(encodeRisuSaveLegacy(dbCache[filePath]));
+                    readTimer.step('encode');
+                    readTimer.done(`/api/read database.bin (${value.length} bytes)`);
                 } catch (e) {
                     // Log the Error itself (not just e.message) so logger.*
                     // tags it and the Express middleware won't re-log after next().
