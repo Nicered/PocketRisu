@@ -635,3 +635,31 @@ describe('snapshotAll', () => {
         expect(JSON.parse(JSON.stringify(snap))['__proto__']).toEqual({ p: 1 })
     })
 })
+
+describe('missing-key reads', () => {
+    test('a miss is remembered, so probing an absent key does not hit the server again', async () => {
+        expect(await store.getItem('absent')).toBeNull()
+        expect(await store.getItem('absent')).toBeNull()
+        expect(calls.filter((c) => c === 'get:' + store.kvKeyFor('absent'))).toHaveLength(1)
+    })
+
+    test('a local write makes a remembered miss readable at once', async () => {
+        expect(await store.getItem('later')).toBeNull()
+        await store.setItem('later', { v: 1 })
+        expect(await store.getItem('later')).toEqual({ v: 1 })
+    })
+
+    test("another device's write shows up after an index refresh or once the miss expires", async () => {
+        vi.useFakeTimers()
+        try {
+            vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+            expect(await store.getItem('remote')).toBeNull()
+            seed('remote', 'from another device')
+            expect(await store.getItem('remote')).toBeNull()
+            vi.setSystemTime(new Date('2026-01-01T00:01:01Z'))
+            expect(await store.getItem('remote')).toBe('from another device')
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+})

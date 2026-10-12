@@ -83,6 +83,13 @@ let preloadPromise: Promise<void> | null = null;
 // the server round-trip; any other index miss is still read from the server
 // so keys written by another device become visible without a reload.
 let tombstones = new Set<string>();
+// Keys the server just reported missing, with when. Plugins probe absent keys
+// over and over (Asset Maid checks optional config keys on every menu switch),
+// and over a remote link each probe was a ~300ms round trip. A miss is trusted
+// for MISS_TTL_MS unless the key shows up in the index (a write here, or an
+// index refresh that saw another device's write).
+const MISS_TTL_MS = 60_000;
+let misses = new Map<string, number>();
 // When the index was last fetched; keys()/length() refresh it in the
 // background once it is older than INDEX_STALE_MS.
 let indexFetchedAt = 0;
@@ -263,12 +270,16 @@ export async function getItem(key: string): Promise<any | null> {
     // other index miss is read anyway: a miss is cheap and the key may have
     // been written by another device since the index was fetched.
     if (tombstones.has(key)) return null;
+    const missAt = misses.get(key);
+    if (missAt !== undefined && !index.has(key) && Date.now() - missAt < MISS_TTL_MS) return null;
     const data = await forageStorage.getItem(kvKeyFor(key));
     if (!data || data.length === 0) {
         index.delete(key);
         knownHashes.delete(key);
+        misses.set(key, Date.now());
         return null;
     }
+    misses.delete(key);
     let value: any;
     const text = decoder.decode(data);
     try {
@@ -576,6 +587,7 @@ export function _resetForTests() {
     preloaded = false;
     preloadPromise = null;
     tombstones = new Set();
+    misses = new Map();
     unparseable = new Set();
     indexFetchedAt = 0;
     refreshing = null;
