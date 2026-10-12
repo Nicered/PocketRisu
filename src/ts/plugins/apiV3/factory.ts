@@ -433,6 +433,58 @@ await (async function() {
 })();
 `;
 
+// Opt-in timing of plugin API calls: localStorage.setItem('risuPluginPerf', '1'),
+// then run console.table(__risuPluginPerf()) in the devtools console for a per-method
+// summary, or console.table(__risuPluginPerfSlow()) for individual calls over 50ms.
+// Results are returned rather than logged because production builds strip console.*.
+type PluginPerfEntry = { calls: number, hostMs: number, postMs: number, maxMs: number };
+const pluginPerfStats = new Map<string, PluginPerfEntry>();
+const pluginPerfSlow: { at: string, call: string, hostMs: number, transferMs: number }[] = [];
+let pluginPerfFlag: boolean | null = null;
+
+function pluginPerfEnabled(): boolean {
+    if (pluginPerfFlag === null) {
+        try { pluginPerfFlag = localStorage.getItem('risuPluginPerf') === '1'; } catch { pluginPerfFlag = false; }
+    }
+    return pluginPerfFlag;
+}
+
+function recordPluginPerf(pluginName: string, method: string, hostMs: number, postMs: number) {
+    const key = `${pluginName || '?'} :: ${method}`;
+    const entry = pluginPerfStats.get(key) ?? { calls: 0, hostMs: 0, postMs: 0, maxMs: 0 };
+    entry.calls += 1;
+    entry.hostMs += hostMs;
+    entry.postMs += postMs;
+    entry.maxMs = Math.max(entry.maxMs, hostMs + postMs);
+    pluginPerfStats.set(key, entry);
+    if (hostMs + postMs >= 50) {
+        pluginPerfSlow.push({ at: new Date().toISOString().slice(11, 23), call: key, hostMs: Math.round(hostMs), transferMs: Math.round(postMs) });
+        if (pluginPerfSlow.length > 100) pluginPerfSlow.shift();
+    }
+}
+
+(globalThis as any).__risuPluginPerf = (reset = true) => {
+    const rows = [...pluginPerfStats.entries()]
+        .map(([key, e]) => ({
+            call: key,
+            calls: e.calls,
+            totalMs: Math.round(e.hostMs + e.postMs),
+            hostMs: Math.round(e.hostMs),
+            transferMs: Math.round(e.postMs),
+            avgMs: +((e.hostMs + e.postMs) / e.calls).toFixed(1),
+            maxMs: Math.round(e.maxMs),
+        }))
+        .sort((a, b) => b.totalMs - a.totalMs);
+    if (reset) pluginPerfStats.clear();
+    return rows;
+};
+
+(globalThis as any).__risuPluginPerfSlow = (reset = true) => {
+    const rows = [...pluginPerfSlow];
+    if (reset) pluginPerfSlow.length = 0;
+    return rows;
+};
+
 export class SandboxHost {
     private iframe: HTMLIFrameElement;
     private apiFactory: any;
@@ -453,8 +505,11 @@ export class SandboxHost {
     // active stream would wait forever once the iframe is gone.
     private activeStreamCleanups = new Set<() => void>();
 
-    constructor(apiFactory: any) {
+    private pluginName: string;
+
+    constructor(apiFactory: any, pluginName = '') {
         this.apiFactory = apiFactory;
+        this.pluginName = pluginName;
     }
 
     public executeInIframe(code: string): Promise<any> {
@@ -845,6 +900,9 @@ export class SandboxHost {
                     streamCleanups = [];
                 };
 
+                const perfStart = pluginPerfEnabled() ? performance.now() : -1;
+                let perfHostEnd = -1;
+
                 try {
 
                     const args = this.deserializeArgs(data.args || [], usedAbortIds);
@@ -875,12 +933,14 @@ export class SandboxHost {
                     response.error = err?.message || String(err || "Host execution error");
                 } finally {
                     for (const id of usedAbortIds) this.abortControllers.delete(id);
+                    if (perfStart >= 0) perfHostEnd = performance.now();
                 }
 
-                console.log("Original request:", data);
-                console.log('Original response:', response, transferables);
                 try {
                     this.iframe.contentWindow?.postMessage(response, '*', transferables);
+                    if (perfStart >= 0) {
+                        recordPluginPerf(this.pluginName, data.method!, perfHostEnd - perfStart, performance.now() - perfHostEnd);
+                    }
                 } catch (error) {
                     rollbackStreams();
                     try {
