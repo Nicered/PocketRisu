@@ -11,6 +11,61 @@ import { decodeRisuSave, encodeRisuSaveLegacy } from "./risuSave"
 import { normalizeChat } from "./database.svelte"
 import type { PatchServerTimings } from "./saveMetrics"
 
+// The database.bin the server last sent, kept in the browser with its x-db-etag. On the next
+// boot the read sends that etag and the server answers 304 when nothing changed, so a reload no
+// longer downloads the whole (tens of MB) database again. Only bytes the server sent are kept,
+// under the etag it sent with them, so a 304 can never hand back content the server doesn't hold.
+export type BootCacheEntry = { etag: string, data: Uint8Array }
+export type BootCache = {
+    get(): Promise<BootCacheEntry | null>
+    set(entry: BootCacheEntry): Promise<void>
+}
+const BOOT_CACHE_KEY = 'database/database.bin'
+let bootCacheDb: Promise<IDBDatabase> | null = null
+function openBootCacheDb(): Promise<IDBDatabase> {
+    bootCacheDb ??= new Promise<IDBDatabase>((resolve, reject) => {
+        if (typeof indexedDB === 'undefined') {
+            reject(new Error('IndexedDB unavailable'))
+            return
+        }
+        const request = indexedDB.open('pocketrisu-boot-cache', 1)
+        request.onupgradeneeded = () => request.result.createObjectStore('entries')
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+    })
+    bootCacheDb.catch(() => { bootCacheDb = null })
+    return bootCacheDb
+}
+const defaultBootCache: BootCache = {
+    async get() {
+        try {
+            const db = await openBootCacheDb()
+            const entry = await new Promise<any>((resolve, reject) => {
+                const request = db.transaction('entries', 'readonly').objectStore('entries').get(BOOT_CACHE_KEY)
+                request.onsuccess = () => resolve(request.result)
+                request.onerror = () => reject(request.error)
+            })
+            return entry && typeof entry.etag === 'string' && entry.data instanceof Uint8Array ? entry : null
+        } catch {
+            return null
+        }
+    },
+    async set(entry) {
+        try {
+            const db = await openBootCacheDb()
+            await new Promise<void>((resolve, reject) => {
+                const tx = db.transaction('entries', 'readwrite')
+                tx.objectStore('entries').put(entry, BOOT_CACHE_KEY)
+                tx.oncomplete = () => resolve()
+                tx.onerror = () => reject(tx.error)
+                tx.onabort = () => reject(tx.error)
+            })
+        } catch {
+            // Quota or private mode: the next boot simply downloads again
+        }
+    },
+}
+
 const AUTH_FETCH_TRANSIENT_MAX_RETRIES = 3
 const AUTH_FETCH_TRANSIENT_BASE_DELAY_MS = 500
 const AUTH_FETCH_TRANSIENT_JITTER_MIN = 0.5
@@ -212,6 +267,7 @@ export class NodeStorage{
     })()
 
     _lastDbEtag: string | null = null
+    bootCache: BootCache = defaultBootCache
 
     private _lastDbWriteDiagnostics: PatchHashDiagnostics | null = null
     authChecked = false
@@ -540,8 +596,17 @@ export class NodeStorage{
             'file-path': Buffer.from(key, 'utf-8').toString('hex')
         }
 
+        const cached = key === BOOT_CACHE_KEY ? await this.bootCache.get() : null
+        if (cached) {
+            headers['if-none-match'] = cached.etag
+        }
+
         // Every read shares this URL, so a cacheable request makes the browser's cache lock run them one at a time
         const da = await this.authFetch('/api/read', { method: "GET", cache: 'no-store', headers })
+        if (da.status === 304 && cached) {
+            this._lastDbEtag = cached.etag
+            return Buffer.from(cached.data)
+        }
         if(da.status < 200 || da.status >= 300){
             throw await this.storageRequestError('getItem', da)
         }
@@ -557,6 +622,9 @@ export class NodeStorage{
             return null
         }
 
+        if (key === BOOT_CACHE_KEY && etag) {
+            void this.bootCache.set({ etag, data: new Uint8Array(data) })
+        }
         return data
     }
     async keys(prefix: string = ''):Promise<string[]>{
