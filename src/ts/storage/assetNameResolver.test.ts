@@ -6,7 +6,7 @@ const mod = { id: 'm-1', ownerKind: 'module', ownerId: 'risuco' } as any
 type Res = { resolved: Record<string, string>; fuzzy: string[] }
 
 describe('createAssetNameResolver', () => {
-    test('asks once with the character first (fuzzy) and modules exact, then serves repeats from memory', async () => {
+    test('asks once with the character first and every owner fuzzy, then serves repeats from memory', async () => {
         const resolve = vi.fn(async (_owners: any, names: string[], _d: number): Promise<Res> => ({
             resolved: Object.fromEntries(names.filter((n) => n !== 'missing').map((n) => [n, `assets/${n}`])),
             fuzzy: names.filter((n) => n === 'near'),
@@ -18,7 +18,7 @@ describe('createAssetNameResolver', () => {
         expect(resolve).toHaveBeenCalledTimes(1)
         expect(resolve.mock.calls[0][0]).toEqual([
             { manifestId: 'c-1', kind: 'character', ownerId: 'chara', fuzzy: true },
-            { manifestId: 'm-1', kind: 'module', ownerId: 'risuco', fuzzy: false },
+            { manifestId: 'm-1', kind: 'module', ownerId: 'risuco', fuzzy: true },
         ])
         expect(resolve.mock.calls[0][1]).toEqual(['bg-fog', 'missing', 'near'])
         expect(resolve.mock.calls[0][2]).toBe(4)
@@ -44,6 +44,7 @@ describe('createAssetNameResolver', () => {
         await resolveNames(undefined, [mod], ['x'], true, 4)
         expect(resolve).toHaveBeenCalledTimes(5)
         expect((resolve.mock.calls[1] as any)[0][0].fuzzy).toBe(false)
+        expect((resolve.mock.calls[1] as any)[0][1].fuzzy).toBe(false)
     })
 
     test('nothing to ask without manifests or names', async () => {

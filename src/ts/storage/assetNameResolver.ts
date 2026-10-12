@@ -74,7 +74,10 @@ export function createAssetNameResolver(resolve: ResolveFn) {
                 manifestId: manifest.id,
                 kind: manifest.ownerKind,
                 ownerId: manifest.ownerId,
-                fuzzy: fuzzy && manifest === characterManifest,
+                // Module assets get the fuzzy fallback too (a model writing "Hongdu" for a
+                // module's "Hongdou" asset). The server matches every owner exactly first,
+                // so this never lets a near-miss beat an exact module or character hit.
+                fuzzy,
             }))
             const request = (async () => {
                 const { resolved, fuzzy: fuzzyNames } = await resolve(owners, missing, maxDistance)
