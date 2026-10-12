@@ -540,7 +540,8 @@ export class NodeStorage{
             'file-path': Buffer.from(key, 'utf-8').toString('hex')
         }
 
-        const da = await this.authFetch('/api/read', { method: "GET", headers })
+        // Every read shares this URL, so a cacheable request makes the browser's cache lock run them one at a time
+        const da = await this.authFetch('/api/read', { method: "GET", cache: 'no-store', headers })
         if(da.status < 200 || da.status >= 300){
             throw await this.storageRequestError('getItem', da)
         }
