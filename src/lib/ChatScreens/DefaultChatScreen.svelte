@@ -9,6 +9,7 @@
     import ShDropdownMenuItem from 'src/lib/UI/GUI/ShDropdownMenuItem.svelte';
     import { selectedCharID, PlaygroundStore, createSimpleCharacter, hypaV3ModalOpen, ScrollToMessageStore, additionalChatMenu, additionalFloatingActionButtons, chatDeselected, chatPanelStore, alertStore } from "../../ts/stores.svelte";
     import { tick, untrack } from 'svelte';
+    import { liftOverlaysOffComposer } from "src/ts/composerOverlayGuard";
     import Chat from "./Chat.svelte";
     import { getAdditionalChatLoadPages, getInitialChatLoadPages } from 'src/ts/chatLoadPages';
     import { type Chat as ChatData, type Message, loadTogglesFromChat } from "../../ts/storage/database.svelte";
@@ -1031,7 +1032,7 @@ import { isMobile } from 'src/ts/platform'
                      plugins that locate the composer via div[class*="items-stretch"] (e.g. gemini-cache-keeper)
                      relied on the pre-redesign container class. Keep it so they can still find/anchor their UI,
                      and it scopes the timer re-flow rules in <style> below. -->
-                <div class="flex flex-wrap items-center gap-1 rounded-3xl border border-darkborderc bg-bgcolor px-2 py-1.5 transition-colors focus-within:border-textcolor plugin-compat-items-stretch">
+                <div use:liftOverlaysOffComposer class="flex flex-wrap items-center gap-1 rounded-3xl border border-darkborderc bg-bgcolor px-2 py-1.5 transition-colors focus-within:border-textcolor plugin-compat-items-stretch">
                 {#if DBState.db.characters[$selectedCharID]?.chaId !== '§playground'}
                     <ShDropdownMenu bind:open={openMenu}>
                         <ShDropdownMenuTrigger>
@@ -1112,7 +1113,7 @@ import { isMobile } from 'src/ts/platform'
                         </ShDropdownMenuContent>
                     </ShDropdownMenu>
                 {:else}
-                    <div onclick={(e) => {
+                    <button type="button" aria-label="add message" onclick={(e) => {
                         DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message.push({
                             role: 'char',
                             data: ''
@@ -1122,14 +1123,14 @@ import { isMobile } from 'src/ts/platform'
                          class="shrink-0 flex justify-center items-center w-9 h-9 rounded-full text-textcolor hover:bg-primary/20 transition-colors cursor-pointer"
                     >
                         <Plus size={20} />
-                    </div>
+                    </button>
                 {/if}
 
                 {#if DBState.db.useChatSticker}
-                    <div onclick={()=>{toggleStickers = !toggleStickers}}
+                    <button type="button" aria-label="stickers" onclick={()=>{toggleStickers = !toggleStickers}}
                          class={"shrink-0 flex justify-center items-center w-9 h-9 rounded-full hover:bg-primary/20 transition-colors cursor-pointer "+(toggleStickers ? 'text-green-500':'text-textcolor')}>
                         <Laugh size={20}/>
-                    </div>
+                    </button>
                 {/if}
 
                 <textarea class="text-input-area outline-hidden text-textcolor px-2 py-1.5 min-w-0 bg-transparent input-text text-base resize-none overflow-x-hidden max-w-full"
@@ -1532,6 +1533,22 @@ import { isMobile } from 'src/ts/platform'
     /* when the timer is present it owns the auto margin, so drop the expand button's own
        ml-auto to avoid a double gap splitting the timer away from the buttons */
     :global(.plugin-compat-items-stretch:has(#gck-cache-timer) .composer-expand-btn) {
+        margin-left: 0;
+    }
+    /* Generic form of the rule above: any other plugin element injected as a direct child
+       and absolutely/fixed positioned over the composer gets .composer-plugin-reflow
+       (see composerOverlayGuard.ts) and joins the button row the same way. */
+    :global(.plugin-compat-items-stretch > .composer-plugin-reflow) {
+        position: relative !important;
+        inset: auto !important;
+        transform: none !important;
+        translate: none !important;
+    }
+    /* first re-flowed item takes the auto margin, unless the gck timer already owns it */
+    :global(.plugin-compat-items-stretch:not(:has(#gck-cache-timer)) > .composer-plugin-reflow:not(.composer-plugin-reflow ~ .composer-plugin-reflow)) {
+        margin-left: auto;
+    }
+    :global(.plugin-compat-items-stretch:has(> .composer-plugin-reflow) .composer-expand-btn) {
         margin-left: 0;
     }
 </style>
