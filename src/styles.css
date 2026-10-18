@@ -726,7 +726,8 @@ body {
 }
 
 .root-loaded-image-dynamic:hover {
-  max-height: 30rem;
+  /* No cap on expand, so tall images are never cropped (tap acts as hover on mobile) */
+  max-height: none;
 }
 
 annotation {
