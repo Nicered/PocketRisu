@@ -47,8 +47,30 @@ export const alertStore = {
     }
 }
 
-// Shared acceptance cache for both global startup TOS and Realm download confirmation.
-const TOS_ACCEPTANCE_STORAGE_KEY = 'tos2'
+// Acceptance of RisuAI's own Terms of Service / Privacy Policy, asked before
+// PocketRisu uses a RisuAI-operated server (Realm, MCP OAuth helper). The
+// stored value is the terms revision: bump it when RisuAI revises its terms so
+// an older acceptance asks again. The legacy 'tos2' key recorded the 2024
+// terms and is intentionally not carried over.
+const RISU_TOS_STORAGE_KEY = 'nodeOnlyRisuTos'
+const RISU_TOS_REVISION = '2026-04-11'
+
+function readRisuTosAccepted(){
+    try {
+        return localStorage.getItem(RISU_TOS_STORAGE_KEY) === RISU_TOS_REVISION
+    } catch {
+        return false
+    }
+}
+
+// Lets surfaces that load Realm on their own (home list, Realm screen) wait
+// for acceptance without popping the dialog themselves.
+export const risuTosAccepted = writable(readRisuTosAccepted())
+
+// The result only the terms dialog's accept button writes. Alerts share one
+// store, so a plain 'yes' could come from another dialog that replaced this
+// one while it was open — that must not count as accepting the terms.
+export const RISU_TOS_ACCEPT_RESULT = 'risu-tos-accepted'
 
 // Normalize any value (string / Error / plain object / primitive) into a
 // human-readable message and an optional stack trace. Shared by alertError
@@ -351,7 +373,8 @@ export async function alertCardExport(type:string = ''){
 
 export async function alertTOS(){
 
-    if(localStorage.getItem(TOS_ACCEPTANCE_STORAGE_KEY) === 'true'){
+    if(readRisuTosAccepted()){
+        risuTosAccepted.set(true)
         return true
     }
 
@@ -362,8 +385,11 @@ export async function alertTOS(){
 
     await waitAlert()
 
-    if(get(alertStoreImported).msg === 'yes'){
-        localStorage.setItem(TOS_ACCEPTANCE_STORAGE_KEY, 'true')
+    if(get(alertStoreImported).msg === RISU_TOS_ACCEPT_RESULT){
+        try {
+            localStorage.setItem(RISU_TOS_STORAGE_KEY, RISU_TOS_REVISION)
+        } catch {}
+        risuTosAccepted.set(true)
         return true
     }
 

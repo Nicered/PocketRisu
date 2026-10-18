@@ -6,7 +6,7 @@ import type { RisuPlugin } from '../plugins/plugins.svelte';
 import type {triggerscript as triggerscriptMain} from '../process/triggers';
 import { downloadFile, saveAsset as saveImageGlobal } from '../globalApi.svelte';
 import { defaultAutoSuggestPrompt, defaultJailbreak, defaultMainPrompt } from './defaultPrompts';
-import { notifySuccess } from '../alert';
+import { notifySuccess, notifyWarning } from '../alert';
 import type { NAISettings } from '../process/models/nai';
 import { prebuiltNAIpresets, prebuiltPresets } from '../process/templates/templates';
 import { defaultColorScheme, type ColorScheme } from '../gui/colorscheme';
@@ -792,6 +792,7 @@ export function setDatabase(data:Database){
     }
     data.nodeOnlyRestoreLastChat ??= false
     data.nodeOnlyAutoCleanAssets ??= false
+    data.nodeOnlyTransferSizeWarning ??= true
     data.keepSessionAlive ??= 'off'
     data.localNetworkMode ??= false
     if (typeof data.localNetworkMode !== 'boolean') data.localNetworkMode = false
@@ -1669,6 +1670,10 @@ export interface Database{
     // unrecoverable, so orphan removal is a deliberate act from the storage
     // dashboard instead. Remote-character caches are swept regardless.
     nodeOnlyAutoCleanAssets?:boolean
+    // Main-menu banner when the full-write payload passes the recommended size
+    // (transferSize.ts). Default ON; servers reached without a body-size cap
+    // (no Cloudflare in front, etc.) can turn it off. The dashboard row stays.
+    nodeOnlyTransferSizeWarning?:boolean
     // Route main-chat model-preset requests through server-side jobs
     // (/api/model-jobs) so generation survives client disconnects.
     // Default OFF (undefined is falsy) — no migration needed. Toggled in
@@ -2670,9 +2675,16 @@ export function saveCurrentPreset(){
     if(db.botPresetsId === -1){
         return
     }
+    if(!Array.isArray(pres)){
+        pres = []
+    }
+    // The selected index can point past the list (#100). Every preset action
+    // saves first, so throwing here locked preset management for good. Keep
+    // the active settings as a new preset rather than overwrite another one.
+    const current = pres[db.botPresetsId]
     const savedPreset:botPreset =  {
-        id: pres[db.botPresetsId]?.id || uuidv4(),
-        name: pres[db.botPresetsId].name,
+        id: current?.id || uuidv4(),
+        name: current ? current.name : language.recoveredPresetName,
         apiType: db.apiType,
         openAIKey: db.openAIKey,
         localNetworkMode: db.localNetworkMode,
@@ -2735,10 +2747,10 @@ export function saveCurrentPreset(){
         customFlags: safeStructuredClone(db.customFlags),
         enableCustomFlags: db.enableCustomFlags,
         regex: db.presetRegex,
-        image: pres?.[db.botPresetsId]?.image ?? '',
+        image: current?.image ?? '',
         // Folder membership lives only on the stored preset (not mirrored to
         // top-level db fields), so carry it over or it is lost on every save.
-        folderId: pres?.[db.botPresetsId]?.folderId,
+        folderId: current?.folderId,
         reasonEffort: db.reasoningEffort ?? 0,
         thinkingTokens: db.thinkingTokens ?? null,
         thinkingType: db.thinkingType ?? 'budget',
@@ -2752,13 +2764,12 @@ export function saveCurrentPreset(){
         verbosity: db.verbosity ?? 1,
         dynamicOutput: db.dynamicOutput ?? null
     }
-    
-    if(!Array.isArray(pres)){
-        pres = []
-    }
-    //if out of bounds, create a new preset
-    if(db.botPresetsId >= pres.length){
+
+    if(!current){
+        console.warn('[Preset] Active preset index has no preset; saving current settings as a new preset', { botPresetsId: db.botPresetsId, length: pres.length })
         pres.push(savedPreset)
+        db.botPresetsId = pres.length - 1
+        notifyWarning(language.recoveredPresetNotice)
     }
     else{
         pres[db.botPresetsId] = savedPreset
@@ -2782,7 +2793,11 @@ export function changeToPreset(id =0, savecurrent = true){
     }
     let db = getDatabase()
     let pres = db.botPresets
-    const newPres = pres[id]
+    const newPres = pres?.[id]
+    if(!newPres){
+        console.warn('[Preset] changeToPreset target has no preset', { id, length: pres?.length })
+        return
+    }
     db.botPresetsId = id
     db = setPreset(db, newPres)
     const chat = getCurrentChat()

@@ -34,7 +34,7 @@
     import Help from "./Help.svelte";
     import { getChatBranches } from "src/ts/gui/branches";
     import { getCurrentCharacter, type TogglePreset, applyToggleValues, snapshotCurrentToggleValues } from "src/ts/storage/database.svelte";
-    import { alertInput, alertConfirm, alertError, alertNormalWait, notifySuccess } from "src/ts/alert";
+    import { alertInput, alertConfirm, alertError, alertNormalWait, notifySuccess, RISU_TOS_ACCEPT_RESULT } from "src/ts/alert";
     import { selectSingleFile } from "src/ts/util";
     import { translateStackTrace } from "../../ts/sourcemap";
     import { getDetailedOSLabel, getFallbackOSLabel, getRisuEnvironmentLabel } from "src/ts/platform";
@@ -507,7 +507,7 @@
                     <span class="text-textcolor2 text-sm">{language.risuMDesc}</span>
                 {:else if $alertStore.submsg === 'preset'}
                     <span class="text-textcolor2 text-sm">{language.risupresetDesc}</span>
-                    {#if cardExportType2 === 'preset' && (DBState.db.botPresets[DBState.db.botPresetsId].image || DBState.db.botPresets[DBState.db.botPresetsId].regex?.length > 0)}
+                    {#if cardExportType2 === 'preset' && (DBState.db.botPresets[DBState.db.botPresetsId]?.image || DBState.db.botPresets[DBState.db.botPresetsId]?.regex?.length > 0)}
                         <span class="text-red-500 text-sm">Use RisuRealm to share the preset. Preset with image or regexes cannot be exported for now.</span>
                     {/if}
                 {:else}
@@ -919,16 +919,26 @@
         }
     }}
 >
+    {#snippet title()}{language.risuTosTitle}{/snippet}
     <!-- svelte-ignore a11y_missing_attribute -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="text-textcolor">
-        You should accept
-        <a role="button" tabindex="0" class="text-borderc hover:underline cursor-pointer" onclick={() => openURL('https://sv.risuai.xyz/hub/tos')}>Terms of Service</a>
-        to continue.
+    <div class="text-textcolor flex flex-col gap-3">
+        <p class="whitespace-pre-wrap">{language.risuTosDesc}</p>
+        <div>
+            <p class="text-textcolor2">{language.risuTosScope}</p>
+            <ul class="list-disc pl-5">
+                <li>{language.risuTosScopeRealm}</li>
+                <li>{language.risuTosScopeMcp}</li>
+            </ul>
+        </div>
+        <div class="flex flex-wrap gap-x-4 gap-y-1">
+            <a role="button" tabindex="0" class="text-borderc hover:underline cursor-pointer" onclick={() => openURL('https://account.sionyw.com/terms')}>{language.risuTosTerms}</a>
+            <a role="button" tabindex="0" class="text-borderc hover:underline cursor-pointer" onclick={() => openURL('https://account.sionyw.com/privacy')}>{language.risuTosPrivacy}</a>
+        </div>
     </div>
     {#snippet footer()}
-        <ShButton variant="outline" onclick={() => alertStore.set({ type: 'none', msg: 'no' })}>Do not Accept</ShButton>
-        <ShButton onclick={() => alertStore.set({ type: 'none', msg: 'yes' })}>Accept</ShButton>
+        <ShButton variant="outline" onclick={() => alertStore.set({ type: 'none', msg: 'no' })}>{language.risuTosDecline}</ShButton>
+        <ShButton onclick={() => alertStore.set({ type: 'none', msg: RISU_TOS_ACCEPT_RESULT })}>{language.risuTosAccept}</ShButton>
     {/snippet}
 </ShAlertDialog>
 

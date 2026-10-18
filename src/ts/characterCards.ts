@@ -343,6 +343,10 @@ export const getRealmInfo = async (realmPath:string) => {
     url.searchParams.delete('realm');
     window.history.pushState(null, '', url.toString());
 
+    if(!(await alertTOS())){
+        return
+    }
+
     const res = await fetch(`${hubURL}/hub/info/${realmPath}`)
     if(res.status !== 200){
         notifyError(await res.text())

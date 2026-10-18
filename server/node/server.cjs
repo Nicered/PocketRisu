@@ -25,7 +25,7 @@ const getVips = () => {
     return _vipsPromise
 }
 const { kvGet, kvSet, kvDel, kvList,
-        kvDelPrefix, kvListWithSizes, kvListWithSizesAndUpdatedAt, kvSize, kvGetUpdatedAt, kvCopyValue, clearEntities, checkpointWal,
+        kvDelPrefix, kvListWithSizes, kvSize, kvGetUpdatedAt, kvCopyValue, clearEntities, checkpointWal,
         gcChunks, reclaimableChunkBytes, isDbBlobChunked, snapshotFootprint, db: sqliteDb } = require('./db.cjs');
 const {
     addLogBatch, queryLogs, clearLogs, countLogs,
@@ -7455,7 +7455,10 @@ function decodeRemoteMetaLastUsed(raw) {
 
 async function computeAssetSweep({ includeAssets, assetGraceMs = 0, includeRemotes = false, checkpointLabel = 'AssetSweep' } = {}) {
     let dbObj;
-    const assets = includeAssets ? kvListWithSizesAndUpdatedAt('assets/') : [];
+    // updated_at is stored after the value BLOB, so reading it walks the whole
+    // value's overflow pages — for every asset that took minutes on a large
+    // library (#102). Only unreferenced candidates need it; it is read below.
+    const assets = includeAssets ? kvListWithSizes('assets/') : [];
     const uncleanable = new Set();
     if (includeAssets) {
         await flushPendingDb();
@@ -7499,7 +7502,7 @@ async function computeAssetSweep({ includeAssets, assetGraceMs = 0, includeRemot
     const assetVictims = includeAssets
         ? assets.filter((it) => {
             if (uncleanable.has(statsBasename(it.key))) return false;
-            if (assetGraceMs > 0 && now - Number(it.updated_at || 0) <= assetGraceMs) return false;
+            if (assetGraceMs > 0 && now - Number(kvGetUpdatedAt(it.key) || 0) <= assetGraceMs) return false;
             return true;
         })
         : [];
@@ -7511,7 +7514,7 @@ async function computeAssetSweep({ includeAssets, assetGraceMs = 0, includeRemot
         const characterIds = new Set(dbObj.characters.map((v) => v?.chaId).filter(Boolean));
         // A deactivated character still owns its remote cache.
         for (const stub of archivedStubsOf(dbObj)) characterIds.add(stub.chaId);
-        const remoteRows = kvListWithSizesAndUpdatedAt('remotes/');
+        const remoteRows = kvListWithSizes('remotes/');
         const remoteByKey = new Map(remoteRows.map((it) => [it.key, it]));
         for (const it of remoteRows) {
             if (it.key.endsWith('.meta')) continue;
@@ -7528,7 +7531,7 @@ async function computeAssetSweep({ includeAssets, assetGraceMs = 0, includeRemot
                 continue;
             }
             const lastUsed = decodeRemoteMetaLastUsed(kvGet(metaKey));
-            const newestUse = Math.max(Number(it.updated_at || 0), lastUsed ?? 0);
+            const newestUse = Math.max(Number(kvGetUpdatedAt(it.key) || 0), lastUsed ?? 0);
             if (now - newestUse > AUTO_SWEEP_GRACE_MS) {
                 remoteVictims.push(it);
                 remoteVictims.push(meta);

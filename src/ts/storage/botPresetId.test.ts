@@ -23,17 +23,21 @@ vi.mock('../globalApi.svelte', () => ({
 
 vi.mock('../alert', () => ({
     notifySuccess: () => {},
+    notifyWarning: vi.fn(),
     alertError: () => {},
 }))
 
 vi.mock('../../lang', () => ({
-    language: {},
+    language: { recoveredPresetName: 'Recovered Preset', recoveredPresetNotice: 'recovered' },
     changeLanguage: () => {},
 }))
 
 const databaseModule = await import('./database.svelte')
 const storesModule = await import('../stores.svelte')
+const alertModule = await import('../alert')
 const {
+    changeToPreset,
+    saveCurrentPreset,
     createBotPresetTemplate,
     getActiveBotPreset,
     getActiveBotPresetId,
@@ -159,5 +163,55 @@ describe('id migration safety', () => {
         expect(getActiveBotPresetId()).toBeUndefined()
         // Lookup by id still works for the indexed entry.
         expect(getBotPresetIndexById('id-x')).toBe(1)
+    })
+})
+
+describe('active index with no preset behind it (#100)', () => {
+    test('saveCurrentPreset keeps the active settings as a new preset instead of throwing', () => {
+        DBState.db.botPresetsId = 5
+        DBState.db.mainPrompt = 'live edits'
+        expect(() => saveCurrentPreset()).not.toThrow()
+        expect(DBState.db.botPresets.map((p: any) => p.name)).toEqual(['A', 'B', 'C', 'Recovered Preset'])
+        const recovered = DBState.db.botPresets[3]
+        expect(recovered.mainPrompt).toBe('live edits')
+        expect(recovered.id).toBeTruthy()
+        expect(['id-a', 'id-b', 'id-c']).not.toContain(recovered.id)
+        expect(DBState.db.botPresetsId).toBe(3)
+        expect(DBState.db.botPresets.slice(0, 3).map((p: any) => p.mainPrompt)).toEqual(['', '', ''])
+        expect(alertModule.notifyWarning).toHaveBeenCalledWith('recovered')
+    })
+
+    test('changeToPreset recovers the active settings, then switches without overwriting the target', () => {
+        // setPreset falls back to db.NAIsettings, which setDatabase always fills.
+        DBState.db.NAIsettings = {}
+        DBState.db.botPresetsId = 3
+        DBState.db.mainPrompt = 'live edits'
+        expect(() => changeToPreset(0)).not.toThrow()
+        expect(DBState.db.botPresetsId).toBe(0)
+        expect(DBState.db.botPresets).toHaveLength(4)
+        expect(DBState.db.botPresets[0].mainPrompt).toBe('')
+        expect(DBState.db.botPresets[3].mainPrompt).toBe('live edits')
+        expect(DBState.db.mainPrompt).toBe('')
+    })
+
+    test('changeToPreset ignores a target index with no preset', () => {
+        expect(() => changeToPreset(9, false)).not.toThrow()
+        expect(DBState.db.botPresetsId).toBe(1)
+    })
+
+    test('a valid index still saves into the active preset in place', () => {
+        DBState.db.botPresets[1].folderId = 'folder-1'
+        DBState.db.mainPrompt = 'edited'
+        saveCurrentPreset()
+        expect(DBState.db.botPresets).toHaveLength(3)
+        expect(DBState.db.botPresets[1]).toMatchObject({ id: 'id-b', name: 'B', mainPrompt: 'edited', folderId: 'folder-1' })
+        expect(DBState.db.botPresetsId).toBe(1)
+    })
+
+    test('botPresetsId -1 still skips saving', () => {
+        DBState.db.botPresetsId = -1
+        saveCurrentPreset()
+        expect(DBState.db.botPresets).toHaveLength(3)
+        expect(DBState.db.botPresetsId).toBe(-1)
     })
 })

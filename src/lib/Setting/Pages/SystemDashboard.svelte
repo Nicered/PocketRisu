@@ -634,6 +634,13 @@
                             {fmtBytes($dbTransferSizeStore.bytes)} / {language.storageRowTransferSizeLimit.replace('{{limit}}', fmtBytes(TRANSFER_SIZE_RECOMMENDED_BYTES))}
                         </span>
                     </div>
+                    <div class="flex items-center justify-between gap-3 py-1.5 pl-5 border-b border-darkborderc/30 last:border-b-0">
+                        <div class="min-w-0">
+                            <div class="text-textcolor2 text-sm">{language.transferSizeWarningToggle}</div>
+                            <div class="text-textcolor2 text-xs leading-relaxed">{language.transferSizeWarningToggleDesc}</div>
+                        </div>
+                        <ShSwitch bind:checked={DBState.db.nodeOnlyTransferSizeWarning} />
+                    </div>
                 {/if}
             {/each}
             {#if showFullDisk && otherUsed != null && otherUsed > 0}

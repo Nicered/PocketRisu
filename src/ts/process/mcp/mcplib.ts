@@ -1,6 +1,6 @@
 import { v4 } from "uuid"
 import { fetchNative, openURL } from "../../globalApi.svelte"
-import { alertInput } from "../../alert";
+import { alertInput, alertTOS } from "../../alert";
 
 export type MCPPrompt = {
     name: string;              // Unique identifier for the prompt
@@ -628,6 +628,12 @@ export class MCPClient{
                     return
                 }
             }
+        }
+
+        // A fresh login relays the authorization code through RisuAI's account
+        // server (oauthhelper below), so it needs RisuAI's terms accepted.
+        if(!(await alertTOS())){
+            throw new Error("RisuAI Terms of Service not accepted")
         }
 
         const OauthDiscovery = new URL(this.url)

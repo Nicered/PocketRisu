@@ -2,6 +2,8 @@
     import { MobileGUIStack, MobileSearch, MobileSideBar, selectedCharID } from "src/ts/stores.svelte";
     import Settings from "../Setting/Settings.svelte";
     import RealmMain from "../UI/Realm/RealmMain.svelte";
+    import RealmTosGate from "../UI/Realm/RealmTosGate.svelte";
+    import { risuTosAccepted } from "src/ts/alert";
     import CharacterManager from "../CharacterManager/CharacterManager.svelte";
     import ChatScreen from "../ChatScreens/ChatScreen.svelte";
     import CharConfig from "../SideBars/CharConfig.svelte";
@@ -50,7 +52,11 @@
     {:else if $selectedCharID !== -1}
         <ChatScreen />
     {:else if $MobileGUIStack === 0}
-        <RealmMain />
+        {#if $risuTosAccepted}
+            <RealmMain />
+        {:else}
+            <RealmTosGate />
+        {/if}
     {:else if $MobileGUIStack === 1}
         <CharacterManager inline externalSearch={$MobileSearch} />
     {:else if $MobileGUIStack === 2}

@@ -794,23 +794,42 @@ import { isMobile } from 'src/ts/platform'
             // multiline until the input is fully cleared. Reflow is therefore a
             // one-way latch (cleared only on empty), so the layout toggle can never
             // feed back into the width measurement and flip-flop 1↔2 lines.
+            // Locals instead of re-reading the state just written: a state the
+            // effect read and then changed makes it run (and measure) again.
+            let isMultiline = multiline
+            let inlineHeight: number | undefined
             if(messageInput === ''){
-                multiline = false
-            } else if(!multiline && measureHeightAt(ref) > 50){
-                multiline = true
+                isMultiline = false
+            } else if(!isMultiline){
+                inlineHeight = measureHeightAt(ref)
+                if(inlineHeight > 50) isMultiline = true
             }
-            // Height for the width that will actually be shown.
-            const sh = measureHeightAt(multiline ? "100%" : ref)
+            multiline = isMultiline
+            // Height for the width that will actually be shown; a composer that
+            // stays inline already measured it above.
+            const sh = isMultiline ? measureHeightAt("100%") : (inlineHeight ?? measureHeightAt(ref))
             // Cap the composer at ~60% of the viewport; beyond that it scrolls.
             const maxH = Math.round(window.innerHeight * 0.6)
-            inputHeight = Math.min(sh, maxH) + "px"
-            inputEle.style.height = inputHeight
+            const height = Math.min(sh, maxH) + "px"
+            inputHeight = height
+            inputEle.style.height = height
             inputOverflow = sh > maxH
         }
     }
 
-    $effect.pre(() => {
-        updateInputSizeAll()
+    // Typing reaches the composer through bind:value, so this effect is the
+    // one place a keystroke measures it (an extra call in oninput measured the
+    // same text twice, translate box included). It runs after the DOM update:
+    // text set from code (a translation, an inserted sticker or file) is only
+    // in the textarea by then, and a pre-effect measured the old text.
+    $effect(() => {
+        updateInputSize()
+    });
+    // The translate box is measured after its DOM value updates, which covers
+    // both typing in it and a translation written into it.
+    $effect(() => {
+        messageInputTranslate
+        if(inputTranslateEle) untrack(() => updateInputTranslateSize())
     });
 
     async function updateInputTransateMessage(reverse: boolean) {
@@ -1193,7 +1212,7 @@ import { isMobile } from 'src/ts/platform'
                             }
                         }
                     }}
-                          oninput={()=>{updateInputSizeAll();updateInputTransateMessage(false)}}
+                          oninput={()=>{updateInputTransateMessage(false)}}
                           onblur={persistDraftNow}
                           style:height={inputHeight}
                 ></textarea>
@@ -1250,7 +1269,7 @@ import { isMobile } from 'src/ts/platform'
                                 e.preventDefault()
                             }
                         }}
-                              oninput={()=>{updateInputSizeAll();updateInputTransateMessage(true)}}
+                              oninput={()=>{updateInputTransateMessage(true)}}
                               placeholder={language.enterMessageForTranslateToEnglish}
                               style:height={inputTranslateHeight}
                     ></textarea>

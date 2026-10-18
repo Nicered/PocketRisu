@@ -12,11 +12,15 @@ async function initTransformers() {
     }
     const { env } = await import('@huggingface/transformers');
     tfCache = await caches.open('tfCache')
+    // Models download straight from Hugging Face, never from RisuAI's mirror.
+    // With allowLocalModels off, localModelPath is only a cache-key prefix:
+    // models cached from the old mirror are still found, and uploaded VITS
+    // files (tfMap in runVITS) resolve through customCache.match.
     env.localModelPath = "https://sv.risuai.xyz/transformers/"
     env.useBrowserCache = false
     env.useFSCache = false
     env.useCustomCache = true
-    env.allowLocalModels = true
+    env.allowLocalModels = false
     env.customCache = {
         put: async (url: URL | string, response: Response) => {
             await tfCache.put(url, response)

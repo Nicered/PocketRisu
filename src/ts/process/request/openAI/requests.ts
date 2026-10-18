@@ -530,8 +530,8 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
         headers["Authorization"] = "Bearer " + db.OaiCompAPIKeys[arg.modelInfo.keyIdentifier]
     }
     if(aiModel === 'openrouter'){
-        headers["X-Title"] = 'RisuAI'
-        headers["HTTP-Referer"] = 'https://risuai.xyz'
+        headers["X-Title"] = 'PocketRisu'
+        headers["HTTP-Referer"] = 'https://github.com/PocketRisu/PocketRisu'
     }
     if(aiModel === 'nanogpt' && db.nanogptProvider){
         headers["X-Provider"] = db.nanogptProvider

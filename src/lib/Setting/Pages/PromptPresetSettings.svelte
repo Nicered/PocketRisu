@@ -11,7 +11,7 @@
     import { language } from "src/lang";
     import { alertConfirm, notifyError, notifySuccess } from "src/ts/alert";
     import { DBState, PromptPresetEditorOpen, PromptPresetSubmenuIndex } from "src/ts/stores.svelte";
-    import { changeToPreset, copyPreset, downloadPreset, importPreset, saveCurrentPreset, withStableActivePreset } from "src/ts/storage/database.svelte";
+    import { changeToPreset, copyPreset, downloadPreset, getActiveBotPreset, importPreset, saveCurrentPreset, withStableActivePreset } from "src/ts/storage/database.svelte";
     import { prebuiltPresets } from "src/ts/process/templates/templates";
     import { requestImmediateSave } from "src/ts/globalApi.svelte";
     import { v4 as uuidv4 } from "uuid";
@@ -26,8 +26,9 @@
     // The page opens on the list; tapping a preset activates it and switches
     // to the editor. The editor still edits the DB top-level preset fields
     // via the setting schema exactly as before — only the shell changed.
-    // A settings-search deep link asks for the editor directly.
-    let view = $state<'list' | 'edit'>(get(PromptPresetEditorOpen) ? 'edit' : 'list')
+    // A settings-search deep link asks for the editor directly; it stays on the
+    // list when the active index has no preset, so tapping one recovers it.
+    let view = $state<'list' | 'edit'>(get(PromptPresetEditorOpen) && getActiveBotPreset() ? 'edit' : 'list')
     PromptPresetEditorOpen.set(false)
 
     const folders = $derived(DBState.db.promptPresetFolders ?? [])
