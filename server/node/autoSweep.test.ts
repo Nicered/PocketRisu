@@ -269,6 +269,42 @@ describe('/api/db/assets/auto-sweep', () => {
         expect(hasKey('assets/old.png')).toBe(true)
     })
 
+    // A new install keeps the client's boot placeholder `{}` on disk until the
+    // first change is saved: no character list, and nothing stored yet.
+    it('reports nothing to sweep on an untouched new save', async () => {
+        await seedDb({})
+
+        for (const assets of [false, true]) {
+            const res = await autoSweep(assets)
+            expect(res.status).toBe(200)
+            expect(await res.json()).toMatchObject({ ok: true, assetsDeleted: 0, remotesDeleted: 0, scanned: 0 })
+        }
+    })
+
+    it('still refuses when a save without a character list has remotes to sweep', async () => {
+        await seedDb({})
+        await writeKey('remotes/orphan.local.bin', 'remote')
+        await writeKey('remotes/orphan.local.bin.meta', JSON.stringify({ lastUsed: Date.now() - 8 * DAY }))
+        setUpdatedAt('remotes/orphan.local.bin', Date.now() - 8 * DAY)
+
+        const res = await autoSweep(false)
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('Database decode failed')
+        expect(hasKey('remotes/orphan.local.bin')).toBe(true)
+        expect(hasKey('remotes/orphan.local.bin.meta')).toBe(true)
+    })
+
+    it('still refuses when a save without a character list has assets to sweep', async () => {
+        await seedDb({})
+        await writeKey('assets/old.png', 'old')
+        setUpdatedAt('assets/old.png', Date.now() - 8 * DAY)
+
+        const res = await autoSweep(true)
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe('Database decode failed')
+        expect(hasKey('assets/old.png')).toBe(true)
+    })
+
     it('preserves paths referenced only by a live asset manifest', async () => {
         await seedDb({
             characters: [{ chaId: 'keep', image: 'assets/avatar.png', chats: [] }],

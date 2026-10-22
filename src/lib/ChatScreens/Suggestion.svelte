@@ -99,7 +99,9 @@
     })
 
     const translateSuggest = async (toggle, messages)=>{
-        if(toggle && messages && messages.length > 0) {
+        // The translate button is hidden while Translator Language is Disabled (''),
+        // so a toggle started from autoTranslate must not send requests either.
+        if(toggle && DBState.db.translator !== '' && messages && messages.length > 0) {
             suggestMessagesTranslated = []
             for(let i = 0; i < suggestMessages.length; i++){
                 let msg = suggestMessages[i]

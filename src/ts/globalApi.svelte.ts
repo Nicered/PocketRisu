@@ -423,6 +423,7 @@ let requestImmediateSaveImpl: ((options?: {
 }) => Promise<void> | void) = () => {}
 let flushSavesImpl: () => Promise<boolean> = async () => false
 let trackCharacterForSaveImpl: (chaId: string) => void = () => {}
+let trackChatForSaveImpl: (chaId: string, chatId: string) => void = () => {}
 let patchSyncBaseline: Database | null = null
 let activeSavePatcher: RisuSavePatcher | null = null
 
@@ -546,6 +547,15 @@ export function trackCharacterForSave(chaId: string) {
     trackCharacterForSaveImpl(chaId)
 }
 
+/**
+ * Include this chat's body in the next save. Only the chat on screen is
+ * tracked automatically, so a write to any other chat needs this; a failed
+ * save keeps it queued like any other change.
+ */
+export function trackChatForSave(chaId: string, chatId: string) {
+    trackChatForSaveImpl(chaId, chatId)
+}
+
 export function setPatchSyncBaseline(data: Database | null) {
     patchSyncBaseline = data ? safeStructuredClone(data) as Database : null
 }
@@ -582,7 +592,7 @@ export async function saveDb() {
     // otherwise only after the user chose it, with the unsaved edits
     // downloadable first. Cancel keeps the tab open with saving paused.
     let handoffDialogOpen = false
-    async function resolveSessionHandoff(kind: 'tab' | 'return') {
+    async function resolveSessionHandoff(kind: 'tab' | 'return', reason: string | null = null) {
         if (handoffDialogOpen) return
         handoffDialogOpen = true
         try {
@@ -592,7 +602,7 @@ export async function saveDb() {
                 if (kind === 'return') {
                     try { sessionStorage.setItem('risu-session-handoff-reload', '1') } catch { /* toast is best-effort */ }
                 } else {
-                    await alertNormalWait(language.activeTabChange)
+                    await alertNormalWait(reason === 'ACCOUNT_IMPORT_ACTIVE' ? language.risuAccountImportActive : language.activeTabChange)
                 }
                 location.reload()
                 return
@@ -645,10 +655,10 @@ export async function saveDb() {
         if (changeTracker.plugins) out.plugins = db.plugins
         return JSON.stringify(out, null, 2)
     }
-    const handOffSession = () => {
+    const handOffSession = (event?: Event) => {
         if (gotChannel) return
         gotChannel = true
-        void resolveSessionHandoff('tab')
+        void resolveSessionHandoff('tab', (event as CustomEvent<{ code?: string | null }> | undefined)?.detail?.code ?? null)
     }
     if (channel) {
         channel.onmessage = (ev) => {
@@ -1110,26 +1120,33 @@ export async function saveDb() {
         const latestData = await forageStorage.getItem('database/database.bin') as unknown as Uint8Array
         if (latestData && latestData.length > 0) {
             const latestDb = await decodeRisuSave(latestData) as Database
-            const selectedChaId = getCurrentCharacter()?.chaId
             const localNames = new Map<string, string>(
                 (Array.isArray(db.characters) ? db.characters : [])
                     .filter((char) => char?.chaId)
                     .map((char) => [char.chaId, char.name || char.chaId] as [string, string]),
             )
-            const generating = generatingCharacters(db)
-            toSave = withTrackedCharacters(toSave, [...generating.keys()])
-            const { mergedDb, skippedArchivedCharIds } = mergeServerDbWithTrackedLocalChanges(
-                latestDb, db, toSave, safeStructuredClone, convertStubsToPlaceholders, syncedArchivedIds, syncedBaselineDb, normalizeJSON,
-            )
+            // Merges the live DB and tracker as they are at the call. Changes
+            // still waiting in the tracker (queued after this save took its
+            // batch) are kept too: queued characters whole, queued chats on
+            // their own.
+            const mergeLatest = () => {
+                const generating = generatingCharacters(db)
+                toSave = withTrackedCharacters(toSave, [...generating.keys(), ...changeTracker.character])
+                const merged = mergeServerDbWithTrackedLocalChanges(
+                    latestDb, db, toSave, safeStructuredClone, convertStubsToPlaceholders, syncedArchivedIds, syncedBaselineDb, normalizeJSON,
+                    changeTracker.chat,
+                )
+                return { ...merged, generatingSkippedKeys: merged.skippedArchivedCharIds.flatMap((chaId) => generating.get(chaId) ?? []) }
+            }
+            let merged = mergeLatest()
             // A character deactivated elsewhere while a generation streams into
             // it has no slot in the merged DB. The send pipeline addresses its
             // target by index into DBState.db, so end those generations first
             // and only then swap the database: every write they still make
             // lands in the old object, which is discarded whole.
-            const generatingSkippedKeys = skippedArchivedCharIds.flatMap((chaId) => generating.get(chaId) ?? [])
-            if (generatingSkippedKeys.length > 0) {
-                console.warn('[Save] Aborting generations for characters deactivated elsewhere before rebase:', skippedArchivedCharIds)
-                if (!await abortGenerationsAndWait(generatingSkippedKeys, 5000)) {
+            while (merged.generatingSkippedKeys.length > 0) {
+                console.warn('[Save] Aborting generations for characters deactivated elsewhere before rebase:', merged.skippedArchivedCharIds)
+                if (!await abortGenerationsAndWait(merged.generatingSkippedKeys, 5000)) {
                     // Swapping now would let the still-running send write
                     // through its stale indices into the new database. Give
                     // up on this attempt instead: the changes are requeued by
@@ -1154,7 +1171,13 @@ export async function saveDb() {
                     requeueTrackedChanges(toSave)
                     throw new Error('Rebase deferred: a generation for a character deactivated elsewhere has not ended yet')
                 }
+                // Edits made while waiting (a trigger result, a chat switch)
+                // are in the live DB and tracker but not in that merge. Merge
+                // again; nothing awaits between the last merge and the swap.
+                merged = mergeLatest()
             }
+            const { mergedDb, skippedArchivedCharIds } = merged
+            const selectedChaId = getCurrentCharacter()?.chaId
             setDatabase(mergedDb)
             // selectedCharID is an index into db.characters; the merged array
             // follows the server's order and may have gained or lost entries,
@@ -1703,6 +1726,14 @@ export async function saveDb() {
 
     trackCharacterForSaveImpl = (chaId) => {
         if (chaId && !changeTracker.character.includes(chaId)) changeTracker.character.push(chaId)
+    }
+    trackChatForSaveImpl = (chaId, chatId) => {
+        if (!chaId || !chatId) return
+        // Counted as an unsaved edit even when the chat is already queued, so
+        // a writer handoff offers to keep it instead of reloading it away.
+        editSeq++
+        if (changeTracker.chat.some(([c, id]) => c === chaId && id === chatId)) return
+        changeTracker.chat.push([chaId, chatId])
     }
 
     let savetrys = 0

@@ -165,7 +165,6 @@ export const advancedDevToolItems: SettingItem[] = [
 /** Developer & experimental tab — Experimental section (flask-marked items; most show only with "show experimental") */
 export const advancedExperimentalItems: SettingItem[] = [
     { id: 'adv.claudeBatch', type: 'check', labelKey: 'claudeBatching', bindKey: 'claudeBatching', helpKey: 'claudeBatching', showExperimental: true, classes: 'mt-4' },
-    { id: 'adv.personaNote', type: 'check', labelKey: 'personaNote', bindKey: 'personaNote', helpKey: 'personaNote', showExperimental: true, classes: 'mt-4' },
     {
         id: 'adv.exp.googleToken', type: 'check', labelKey: 'googleCloudTokenization', bindKey: 'googleClaudeTokenizing',
         condition: (ctx) => ctx.db.useExperimental, helpKey: 'googleCloudTokenization', showExperimental: true, classes: 'mt-4'

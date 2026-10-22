@@ -24,6 +24,8 @@ vi.mock('../util', () => ({
   getPersonaPrompt: vi.fn(),
   getUserIcon: vi.fn(),
   getUserName: vi.fn(),
+  parseKeyValue: (template?: string) =>
+    template ? template.split('\n').map((line) => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]) : [],
 }))
 
 vi.mock('../storage/database.svelte', () => ({
@@ -52,12 +54,14 @@ vi.mock('./request/request', () => ({ requestChatData: vi.fn(async () => ({ type
 vi.mock('./stableDiff', () => ({ generateAIImage: vi.fn() }))
 
 let runScripted: typeof import('./scriptings').runScripted
+let runLuaInteractionTrigger: typeof import('./scriptings').runLuaInteractionTrigger
 
 beforeAll(async () => {
   const jsonLua = await readFile(resolve(process.cwd(), 'public/lua/json.lua'), 'utf8')
   vi.stubGlobal('fetch', vi.fn(async () => new Response(jsonLua, { status: 200 })))
   const scriptings = await import('./scriptings')
   runScripted = scriptings.runScripted
+  runLuaInteractionTrigger = scriptings.runLuaInteractionTrigger
 })
 
 test('does not stop generation when setStateChanged is a no-op', async () => {
@@ -231,4 +235,32 @@ test('passes API results to Lua as plain tables without JS constructors', async 
   )
 
   expect(result.res).toEqual({ type: 'table', hasConstructor: false })
+})
+
+test.each(['button', 'form'] as const)('keeps a %s script on the chat it started on', async (type) => {
+  const started = { message: [], scriptstate: {} }
+  const opened = { message: [], scriptstate: {} }
+  const { getCurrentChat } = await import('../storage/database.svelte')
+  vi.mocked(getCurrentChat).mockReturnValue(opened as never)
+  const code = `
+    function onButtonClick(id, data)
+      setChatVar(id, 'picked', data .. ':' .. getChatVar(id, 'fallback'))
+      addChat(id, 'char', 'clicked')
+    end
+    function onFormSubmit(id, data)
+      onButtonClick(id, data)
+    end
+  `
+  const char = {
+    type: 'character',
+    defaultVariables: 'fallback=default',
+    triggerscript: [{ comment: '', type: 'manual', conditions: [], effect: [{ type: 'triggerlua', code }] }],
+  }
+
+  const result = await runLuaInteractionTrigger(type, char as never, 'A', undefined, started as never)
+
+  expect(started.scriptstate).toEqual({ $picked: 'A:default' })
+  expect(started.message).toEqual([{ role: 'char', data: 'clicked' }])
+  expect(opened).toEqual({ message: [], scriptstate: {} })
+  expect(result.chat).toBe(started)
 })

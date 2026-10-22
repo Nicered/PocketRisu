@@ -2,7 +2,7 @@ import fc from 'fast-check'
 import { writable } from 'svelte/store'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { DBState } from '../../stores.svelte'
-import { getChatVar, getGlobalChatVar, setChatVar } from '../chatVar.svelte'
+import { getChatVar, getChatVarOf, getGlobalChatVar, setChatVar, setChatVarOf } from '../chatVar.svelte'
 import { resetChatVariables } from './cbs/lib'
 
 //#region module mocks
@@ -105,6 +105,20 @@ test('can set a chat variable over its default value', () => {
 
   expect(getChatVar('char')).toBe('overridden')
   expect(getChatVar('template')).toBe('overridden')
+})
+
+test('can set and get a variable of a chat that is not open', () => {
+  DBState.db.characters[0].defaultVariables = 'shared=open default'
+  DBState.db.templateDefaultVariables = 'template=default'
+  const other = { scriptstate: {} } as never
+
+  expect(setChatVarOf(other, 'picked', 'A')).toBe(true)
+  expect(setChatVarOf(other, 'picked', 'A')).toBe(false)
+
+  expect(getChatVarOf(other, 'picked')).toBe('A')
+  expect(getChatVar('picked')).toBe('null')
+  expect(getChatVarOf(other, 'shared', 'shared=other default')).toBe('other default')
+  expect(getChatVarOf(other, 'template')).toBe('default')
 })
 
 test('can get a global chat variable', () => {

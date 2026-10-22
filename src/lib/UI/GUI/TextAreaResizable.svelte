@@ -14,8 +14,15 @@
   let { value = $bindable(''), handleLongPress = (e:MouseEvent) => {} }: Props = $props();
 
     function resize() {
+        // The 0px reset briefly shrinks the chat scroller; when the view is near its far end the
+        // browser clamps scrollTop and the screen jumps, so put every ancestor's offset back.
+        const scrollTops: [HTMLElement, number][] = [];
+        for (let el = textarea.parentElement; el; el = el.parentElement) {
+            if (el.scrollTop !== 0) scrollTops.push([el, el.scrollTop]);
+        }
         textarea.style.height = '0px'; // Reset the textarea height
         textarea.style.height = `calc(${textarea.scrollHeight}px + 1rem)`; // Set the new height
+        for (const [el, top] of scrollTops) el.scrollTop = top;
     }
 
     function handleInput() {

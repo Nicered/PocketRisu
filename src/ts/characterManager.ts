@@ -3,7 +3,8 @@
  * trashed character, keyed by chaId. Pure; the Svelte component derives it
  * from the DB and re-derives on change.
  */
-import type { Database } from './storage/database.svelte'
+import type { Database, folder } from './storage/database.svelte'
+import { isFolderEntry, type OrderEntry } from './characterOrder'
 
 export interface ManagerEntry {
     chaId: string
@@ -87,4 +88,49 @@ export function sortEntries(entries: ManagerEntry[], sort: ManagerSort): Manager
         default:
             return list
     }
+}
+
+/** One block of the grid's 'order' view: a folder, or a run of loose characters between folders. */
+export interface GridSection {
+    key: string
+    folder?: folder
+    items: ManagerEntry[]
+    /** Offset of the first item in the flattened grid, so a paging window can cut across sections. */
+    start: number
+}
+
+/**
+ * The rail sequence as grid sections: one per folder (empty ones only when
+ * `keepEmptyFolders`) and untitled runs of loose characters between them.
+ * Trashed, invisible and repeated characters are skipped.
+ */
+export function buildGridSections(
+    order: OrderEntry[],
+    entries: Map<string, ManagerEntry>,
+    visible: (entry: ManagerEntry) => boolean,
+    keepEmptyFolders: boolean,
+): GridSection[] {
+    const sections: Omit<GridSection, 'start'>[] = []
+    const seen = new Set<string>()
+    const take = (id: string, into: ManagerEntry[]) => {
+        const e = entries.get(id)
+        if (e && !e.trashed && !seen.has(id) && visible(e)) { seen.add(id); into.push(e) }
+    }
+    for (const entry of order) {
+        if (isFolderEntry(entry)) {
+            const items: ManagerEntry[] = []
+            entry.data.forEach((id) => take(id, items))
+            if (items.length > 0 || keepEmptyFolders) sections.push({ key: `folder:${entry.id}`, folder: entry, items })
+        } else {
+            let last = sections[sections.length - 1]
+            if (!last || last.folder) sections.push(last = { key: `loose:${sections.length}`, items: [] })
+            take(entry, last.items)
+        }
+    }
+    let start = 0
+    return sections.filter((s) => s.folder || s.items.length > 0).map((s) => {
+        const out = { ...s, start }
+        start += s.items.length
+        return out
+    })
 }

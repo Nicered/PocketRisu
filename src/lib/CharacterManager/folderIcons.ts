@@ -31,3 +31,9 @@ export const FOLDER_ICON_NAMES = Object.keys(FOLDER_ICONS)
 export function folderIconComponent(name: string | undefined): Component<any> | undefined {
     return name ? FOLDER_ICONS[name] : undefined
 }
+
+/** Color swatch next to a folder name (same palette the rail tints its slot with). */
+export const FOLDER_COLOR_CLASS: Record<string, string> = {
+    red: 'bg-red-700', yellow: 'bg-yellow-700', green: 'bg-green-700', blue: 'bg-blue-700',
+    indigo: 'bg-indigo-700', purple: 'bg-purple-700', pink: 'bg-pink-700',
+}

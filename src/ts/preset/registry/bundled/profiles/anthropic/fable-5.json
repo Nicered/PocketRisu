@@ -1,7 +1,7 @@
 {
   "id": "anthropic:fable-5",
-  "version": 1,
-  "updatedAt": 1781025739404,
+  "version": 2,
+  "updatedAt": 1792577393000,
   "displayName": "Claude Fable 5",
   "displayNameI18n": {
     "ko": "Claude Fable 5"
@@ -119,6 +119,30 @@
       }
     },
     {
+      "key": "thinking_display",
+      "type": "string",
+      "label": "Thinking Display",
+      "enum": [
+        {
+          "value": "summarized",
+          "label": "Summarized"
+        },
+        {
+          "value": "omitted",
+          "label": "Omitted"
+        }
+      ],
+      "default": "summarized",
+      "mapsTo": {
+        "target": "body",
+        "path": "thinking.display"
+      },
+      "description": "Summarized returns a readable summary of the thinking; Omitted returns thinking blocks with empty text (faster first token, same cost). The API default on this model is Omitted.",
+      "descriptionI18n": {
+        "ko": "Summarized는 thinking 요약 텍스트를 돌려주고, Omitted는 텍스트 없이 빈 thinking 블록만 돌려줍니다(첫 토큰이 빨라지고 비용은 같음). 이 모델의 API 기본값은 Omitted입니다."
+      }
+    },
+    {
       "key": "service_tier",
       "type": "string",
       "label": "Service Tier",
@@ -227,6 +251,13 @@
         "order": 2
       },
       {
+        "key": "thinking_display",
+        "widget": "select",
+        "visibility": "advanced",
+        "group": "reasoning",
+        "order": 3
+      },
+      {
         "key": "service_tier",
         "widget": "select",
         "visibility": "advanced",
@@ -252,7 +283,8 @@
   "sourceUrls": [
     "https://platform.claude.com/docs/en/about-claude/models/introducing-claude-fable-5-and-claude-mythos-5",
     "https://platform.claude.com/docs/en/about-claude/models/overview",
-    "https://platform.claude.com/docs/en/build-with-claude/effort"
+    "https://platform.claude.com/docs/en/build-with-claude/effort",
+    "https://platform.claude.com/docs/en/build-with-claude/thinking"
   ],
   "limits": {
     "known": true,

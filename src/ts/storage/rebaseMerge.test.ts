@@ -94,6 +94,57 @@ describe('withTrackedCharacters', () => {
     })
 })
 
+describe('mergeServerDbWithTrackedLocalChanges — pending chats', () => {
+    // A trigger result landed in chat a1 of character a (not open) while a
+    // save of b was in flight, so a1 waits in the tracker, outside `toSave`.
+    const convert = (chats: any[]) => chats.map((c) => ({ ...c, _stub: undefined, _placeholder: true }))
+    const merge = (server: any, local: any, pendingChats: [string, string][], save = toSave({ character: ['b'] })) =>
+        mergeServerDbWithTrackedLocalChanges(server, local, save as any, clone, convert, new Set(), null, (v) => v, pendingChats)
+    const find = (db: any, chaId: string) => db.characters.find((c: any) => c.chaId === chaId)
+
+    test('only the queued chat comes from local; the rest of the character keeps the server copy', () => {
+        // Another device meanwhile edited a's description and added chat a2.
+        const server = { characters: [chr('a', { desc: 'server', chats: [{ id: 'a1', _stub: true }, { id: 'a2', _stub: true }] }), chr('b')] } as any
+        const local = { characters: [chr('a', { desc: 'old', chats: [{ id: 'a1', message: [{ data: 'result' }] }] }), chr('b')] } as any
+
+        const { mergedDb, skippedArchivedCharIds } = merge(server, local, [['a', 'a1']])
+        const a = find(mergedDb, 'a')
+        expect(a.desc).toBe('server')
+        expect(a.chats[0]).toEqual({ id: 'a1', message: [{ data: 'result' }] })
+        expect(a.chats[1]).toMatchObject({ id: 'a2', _placeholder: true })
+        expect(skippedArchivedCharIds).toEqual([])
+        expect(server.characters[0].chats[0]).toEqual({ id: 'a1', _stub: true })
+        expect(local.characters[0].chats[0].message).toEqual([{ data: 'result' }])
+    })
+
+    test('a queued chat missing on the server is appended; a character missing there is kept whole', () => {
+        const server = { characters: [chr('a', { chats: [{ id: 'a2', _stub: true }] }), chr('b')] } as any
+        const local = { characters: [chr('a', { chats: [{ id: 'a1', message: [] }] }), chr('b'), chr('n', { desc: 'new', chats: [{ id: 'n1', message: [] }] })] } as any
+
+        const { mergedDb } = merge(server, local, [['a', 'a1'], ['n', 'n1']])
+        expect(find(mergedDb, 'a').chats.map((c: any) => c.id)).toEqual(['a2', 'a1'])
+        expect(find(mergedDb, 'n')).toEqual(chr('n', { desc: 'new', chats: [{ id: 'n1', message: [] }] }))
+    })
+
+    test('a queued chat of a character deactivated elsewhere is reported, not put back', () => {
+        const server = { characters: [chr('b')], nodeOnlyArchivedCharacters: [{ chaId: 'a' }] } as any
+        const local = { characters: [chr('a', { chats: [{ id: 'a1', message: [] }] }), chr('b')] } as any
+
+        const { mergedDb, skippedArchivedCharIds } = merge(server, local, [['a', 'a1']])
+        expect(mergedDb.characters.map((c: any) => c.chaId)).toEqual(['b'])
+        expect(skippedArchivedCharIds).toEqual(['a'])
+    })
+
+    test('an unloaded local chat is left alone, and a tracked character is still overlaid whole', () => {
+        const server = { characters: [chr('a', { desc: 'server', chats: [{ id: 'a1', name: 'renamed', _stub: true }] }), chr('b', { desc: 'server' })] } as any
+        const local = { characters: [chr('a', { desc: 'old', chats: [{ id: 'a1', name: 'old', _placeholder: true }] }), chr('b', { desc: 'local', chats: [{ id: 'b1', message: [] }] })] } as any
+
+        const { mergedDb } = merge(server, local, [['a', 'a1'], ['b', 'b1']])
+        expect(find(mergedDb, 'a')).toMatchObject({ desc: 'server', chats: [{ id: 'a1', name: 'renamed', _placeholder: true }] })
+        expect(find(mergedDb, 'b')).toEqual(chr('b', { desc: 'local', chats: [{ id: 'b1', message: [] }] }))
+    })
+})
+
 describe('hasAmbiguousCharacterIds', () => {
     test('unique non-empty ids are fine; a missing, empty, or repeated id is ambiguous', () => {
         expect(hasAmbiguousCharacterIds([chr('a'), chr('b')])).toBe(false)

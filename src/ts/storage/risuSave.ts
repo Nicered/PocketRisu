@@ -90,6 +90,8 @@ enum RisuSaveType {
     PLUGINS = 9,
     LOADOUTS = 10,
     PLUGIN_STORAGE = 11,
+    /** Reserved: upstream SaveKV namespace block, never written by PocketRisu */
+    KV = 12,
 }
 
 type EncodeBlockArg = {

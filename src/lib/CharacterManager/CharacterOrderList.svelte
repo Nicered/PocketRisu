@@ -16,7 +16,7 @@
     import type { ManagerEntry } from "src/ts/characterManager";
     import { folderDisplayMode, type folder } from "src/ts/storage/database.svelte";
     import { language } from "src/lang";
-    import { folderIconComponent } from "./folderIcons";
+    import { FOLDER_COLOR_CLASS, folderIconComponent } from "./folderIcons";
 
     interface Props {
         order: OrderEntry[];
@@ -58,12 +58,6 @@
         collapsed = next;
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...next])); } catch {}
     }
-
-    // Color swatch next to the folder name (same palette the rail tints its slot with).
-    const folderColorClass: Record<string, string> = {
-        red: 'bg-red-700', yellow: 'bg-yellow-700', green: 'bg-green-700', blue: 'bg-blue-700',
-        indigo: 'bg-indigo-700', purple: 'bg-purple-700', pink: 'bg-pink-700',
-    };
 
     function entryKey(entry: OrderEntry): string {
         return isFolderEntry(entry) ? `folder:${entry.id}` : entry;
@@ -139,7 +133,7 @@
                     onclick={() => toggleCollapsed(entry.id)}
                     onkeydown={(e) => { if (e.key === 'Enter') toggleCollapsed(entry.id) }}>
                     {#if isCollapsed}<ChevronRightIcon size={16} class="shrink-0 text-textcolor2"/>{:else}<ChevronDownIcon size={16} class="shrink-0 text-textcolor2"/>{/if}
-                    <span class="shrink-0 h-4 w-4 rounded-sm border border-darkborderc {folderColorClass[entry.color] ?? 'bg-bgcolor'}" title={entry.color || language.defaultLabel}></span>
+                    <span class="shrink-0 h-4 w-4 rounded-sm border border-darkborderc {FOLDER_COLOR_CLASS[entry.color] ?? 'bg-bgcolor'}" title={entry.color || language.defaultLabel}></span>
                     <FolderGlyph size={16} class="shrink-0 text-textcolor2"/>
                     <span class="truncate grow font-medium">{entry.name}</span>
                     <span class="text-xs text-textcolor2">{count}{count !== entry.data.length ? ` / ${entry.data.length}` : ''}</span>

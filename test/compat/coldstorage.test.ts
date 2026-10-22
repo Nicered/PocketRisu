@@ -179,8 +179,9 @@ describe('plugin storage cold storage migration (upstream cad8595a)', () => {
     const seed = createSeedBackup({
       pluginCustomStorage: {
         _coldplugin: { 'ltm/memory': ID_A, 'ltm/config': ID_B },
-        // Inline key written before upstream migrated it: the cold copy wins.
-        'ltm/memory': 'stale inline copy',
+        // Inline key written after upstream moved it (an older build, a V2
+        // plugin): newer than the cold copy, as upstream v210 rules.
+        'ltm/memory': 'written after the move',
         // A key upstream never moved stays as is.
         'other/flag': 'kept',
       },
@@ -195,13 +196,16 @@ describe('plugin storage cold storage migration (upstream cad8595a)', () => {
 
     const { raw } = normalizeBackup(await client.exportBackup())
     expect(raw.pluginCustomStorage).toEqual({
-      'ltm/memory': memory,
+      'ltm/memory': 'written after the move',
       'ltm/config': 'config-string',
       'other/flag': 'kept',
     })
+    expect(raw.nodeOnlyPluginStorageRecovery).toEqual([
+      expect.objectContaining({ source: 'database', shadowedLegacyKeys: ['ltm/memory'] }),
+    ])
   })
 
-  test('keeps unreadable keys under _coldplugin instead of dropping them', async () => {
+  test('records unreadable keys outside the plugin key space instead of dropping them', async () => {
     const srv = await spawnServer()
     servers.push(srv)
     const client = await createClient(srv.port, srv.password)
@@ -219,9 +223,12 @@ describe('plugin storage cold storage migration (upstream cad8595a)', () => {
     expect(result.ok).toBe(true)
 
     const { raw } = normalizeBackup(await client.exportBackup())
-    expect(raw.pluginCustomStorage).toEqual({
-      'ltm/memory': 'restored',
-      _coldplugin: { 'ltm/lost': ID_MISSING },
-    })
+    expect(raw.pluginCustomStorage).toEqual({ 'ltm/memory': 'restored' })
+    // The breadcrumb travels with the backup, but as a NodeOnly field: kept
+    // under _coldplugin it would reach plugins as a key and upstream as a
+    // legacy map.
+    expect(raw.nodeOnlyPluginStorageRecovery).toEqual([
+      expect.objectContaining({ source: 'database', legacyFailed: { 'ltm/lost': ID_MISSING } }),
+    ])
   })
 })

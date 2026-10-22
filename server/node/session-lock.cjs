@@ -86,6 +86,14 @@ function createSessionLock(opts = {}) {
         return { ok: false };
     }
 
+    // After all data was replaced (RisuAI account import): every page loaded
+    // before now holds the old data, so all of them become stale, the lock
+    // holder included. A page loaded afterwards takes the lock with its first
+    // user action.
+    function revokeAll() {
+        active = { id: null, lastWriteAt: now() };
+    }
+
     function activeId() {
         return active ? active.id : null;
     }
@@ -110,7 +118,7 @@ function createSessionLock(opts = {}) {
         return 'stale';
     }
 
-    return { register, checkWrite, peek, activeId };
+    return { register, checkWrite, peek, revokeAll, activeId };
 }
 
 module.exports = { createSessionLock };

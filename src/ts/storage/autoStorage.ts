@@ -132,6 +132,14 @@ export class AutoStorage{
     async deleteServerBackup(filename: string) { await this.Init(); return this.realStorage.deleteServerBackup(filename) }
     async downloadServerBackup(filename: string) { await this.Init(); return this.realStorage.downloadServerBackup(filename) }
 
+    // ── RisuAI account import ─────────────────────────────────────────────────
+    async getRisuAccountImportConfig() { await this.Init(); return this.realStorage.getRisuAccountImportConfig() }
+    async getRisuAccountImportStatus() { await this.Init(); return this.realStorage.getRisuAccountImportStatus() }
+    async prepareRisuAccountImport(token: string, id: string) { await this.Init(); return this.realStorage.prepareRisuAccountImport(token, id) }
+    async startRisuAccountDownload() { await this.Init(); return this.realStorage.startRisuAccountDownload() }
+    async cancelRisuAccountImport() { await this.Init(); return this.realStorage.cancelRisuAccountImport() }
+    async applyRisuAccountImport() { await this.Init(); return this.realStorage.applyRisuAccountImport() }
+
     // ── Save-folder migration ─────────────────────────────────────────────────
     async scanSaveFolder(folderPath?: string) { await this.Init(); return this.realStorage.scanSaveFolder(folderPath) }
     async executeSaveFolderImport(folderPath?: string) { await this.Init(); return this.realStorage.executeSaveFolderImport(folderPath) }

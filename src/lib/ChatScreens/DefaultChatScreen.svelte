@@ -833,7 +833,9 @@ import { isMobile } from 'src/ts/platform'
     });
 
     async function updateInputTransateMessage(reverse: boolean) {
-        if(!DBState.db.useAutoTranslateInput){
+        // The menu toggle is hidden while Translator Language is Disabled (''),
+        // so a stale useAutoTranslateInput must not keep translating.
+        if(!DBState.db.useAutoTranslateInput || DBState.db.translator === ''){
             return
         }
         if(isExpTranslator()){
@@ -1249,7 +1251,7 @@ import { isMobile } from 'src/ts/platform'
                 </div>
               </div>
             </div>
-            {#if DBState.db.useAutoTranslateInput && DBState.db.characters[$selectedCharID]?.chaId !== '§playground'}
+            {#if DBState.db.useAutoTranslateInput && DBState.db.translator !== '' && DBState.db.characters[$selectedCharID]?.chaId !== '§playground'}
                 <div class="flex items-center mt-2 mb-2">
                     <label for='messageInputTranslate' class="text-textcolor ml-4">
                         <LanguagesIcon />

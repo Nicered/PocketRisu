@@ -4,6 +4,7 @@
     import ShButton from "src/lib/UI/GUI/ShButton.svelte";
     import ShAlert from "src/lib/UI/GUI/ShAlert.svelte";
     import ShAccordion from "src/lib/UI/GUI/ShAccordion.svelte";
+    import RisuAccountImport from "src/lib/Setting/RisuAccountImport.svelte";
     import { alertConfirm } from "src/ts/alert";
     import {
         LoadLocalBackup,
@@ -49,6 +50,7 @@
 
     <!-- Migration: upstream RisuAI ↔ NodeOnly ─────────────────────────── -->
     <div class="flex flex-col">
+        <RisuAccountImport />
         {@render actionRow(language.saveBackupForUpstream, undefined, language.settingActionExport, async () => {
             if (await alertConfirm(language.saveBackupForUpstreamConfirm)) {
                 SaveLocalBackupForUpstream();

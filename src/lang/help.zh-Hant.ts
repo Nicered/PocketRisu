@@ -248,7 +248,7 @@ export const helpZhHant = {
             "- **Playground**：在 Playground 測試 Embedding",
         "keepSessionAlive":
             "維持分頁活動狀態，避免工作階段因閒置而失效。可能需要重新整理才會生效。\n\n" +
-            "- **透過音訊**：定期播放無聲音訊以維持工作階段。此方式在大多數瀏覽器中相容性最佳，也通常最有效。\n",
+            "- **透過音訊**：循環播放人耳聽不到的低頻音以維持工作階段。此方式在大多數瀏覽器中相容性最佳，也通常最有效。在 Android 上啟用時會顯示媒體通知，其他音樂 App 也可能會暫停。\n",
         "reSummarizationPrompt":
             "使用批次編輯將多個已選摘要合併成一個摘要時使用的提示詞。留空則使用預設提示詞。摘要輸出會以兩個換行（\n\n）切分成區塊，供相似度搜尋使用",
         "hypaV3MemoryTokensRatio":
@@ -625,7 +625,7 @@ export const helpZhHant = {
         "personaName":
             "目前使用者人設的名稱。對話中的 `{{user}}` 變數會填入此名稱，也是角色用來稱呼您的名稱",
         "personaNote":
-            "此使用者人設的備註／識別文字（只有啟用「進階 → personaNote」時顯示）。可用來區分顯示名稱相同的多個人設",
+            "此使用者人設的備註／識別文字。可用來區分顯示名稱相同的多個人設",
         "personaDescription":
             "使用者人設資訊。會嵌入送給模型的系統提示詞，讓模型了解使用者是誰。例如：「<user> 是一名 20 歲女性，平常說話冷靜。」",
         "personaLargePortrait":

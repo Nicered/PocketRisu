@@ -233,7 +233,7 @@ export const helpEn = {
             "- **File Attachments**: Searching within PDF/TXT/XML attachments",
         keepSessionAlive:
             "Keeps the tab active and prevents the session from expiring due to inactivity in browsers. This may require refresh to take effect.\n\n" +
-            "- **Via Sound**: Plays a silent audio at regular intervals to keep the session alive. This method is known as most compatible and effective in most browsers.\n",
+            "- **Via Sound**: Loops an inaudible low-frequency tone to keep the session alive. This method is known as most compatible and effective in most browsers. On Android, a media notification is shown while it is active, and other music apps may pause.\n",
         reSummarizationPrompt:
             "The prompt used when merging multiple selected summaries into one via bulk edit. If blank, the default prompt is used. The summary output is split by double newlines (\\n\\n) into chunks for similarity search.",
         hypaV3MemoryTokensRatio:
@@ -620,7 +620,7 @@ export const helpEn = {
         personaName:
             "Name of the current persona. This fills the `{{user}}` variable in chats and is the name the character uses to address you.",
         personaNote:
-            "A memo / identifier for this persona (only shown when Advanced → personaNote is enabled). Useful for distinguishing multiple personas that share the same display name.",
+            "A memo / identifier for this persona. Useful for distinguishing multiple personas that share the same display name.",
         personaDescription:
             "Persona information. Embedded into the system prompt sent to the model so it recognizes who the user is. Example: \"<user> is a 20 year old woman who normally speaks calmly.\"",
         personaLargePortrait:

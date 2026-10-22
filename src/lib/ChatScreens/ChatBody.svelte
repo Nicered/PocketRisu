@@ -238,7 +238,9 @@
                 lastChatId = chatID
                 let translateText = false
                 try {
-                    if(DBState.db.autoTranslate){
+                    // The Auto Translation checkbox is hidden while Translator Language is
+                    // Disabled (''), so a stale autoTranslate must not keep translating.
+                    if(DBState.db.autoTranslate && DBState.db.translator){
                         if(DBState.db.autoTranslateCachedOnly && DBState.db.translatorType === 'llm'){
                             const cache = DBState.db.translateBeforeHTMLFormatting
                             ? await getLLMCache(data)
@@ -302,9 +304,12 @@
         } catch (error) {
             //retry
             if(tries > 2){
-
                 const err = error as Error
-                alertError(`Error while parsing chat message: ${translated}, ${err.message}, ${err.stack}`)
+                const wrapped = new Error(`Error while parsing chat message: ${err?.message ?? error}`)
+                if(error instanceof Error){
+                    wrapped.stack = error.stack
+                }
+                alertError(wrapped)
                 lastParsedQueue = hasRenderableResult(data) ? data : lastParsed
                 return lastParsedQueue
             }

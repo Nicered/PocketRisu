@@ -169,12 +169,10 @@
                         <SettingFieldLabel label={language.name} helpKey="personaName" />
                         <ShInput className="mt-1" placeholder="User" bind:value={DBState.db.username}/>
                     </div>
-                    {#if DBState.db.personaNote}
-                        <div class="flex flex-col gap-1">
-                            <SettingFieldLabel label={language.note} helpKey="personaNote" />
-                            <ShInput className="mt-1" bind:value={DBState.db.userNote} placeholder={`Put a unique identifier for this persona here.\nExample: [Alternate Hunters persona]`} />
-                        </div>
-                    {/if}
+                    <div class="flex flex-col gap-1">
+                        <SettingFieldLabel label={language.note} helpKey="personaNote" />
+                        <ShInput className="mt-1" bind:value={DBState.db.userNote} placeholder={language.personaNotePlaceholder} />
+                    </div>
                     <div class="flex flex-col gap-1">
                         <SettingFieldLabel label={language.description} helpKey="personaDescription" />
                         <TextAreaInput className="mt-1" autocomplete="off" bind:value={DBState.db.personaPrompt} placeholder={`Put the description of this persona here.\nExample: [<user> is a 20 year old girl.]`} />

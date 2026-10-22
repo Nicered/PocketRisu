@@ -132,6 +132,20 @@ describe('index + getItem', () => {
         expect(store.keys()).toEqual([])
     })
 
+    // The V3 bridge passes these through as is (upstream returns them too).
+    test('falsy values come back as themselves, not null', async () => {
+        seed('zero', 0)
+        seed('no', false)
+        seed('empty-string', '')
+        await store.init()
+        for (let pass = 0; pass < 2; pass++) {
+            expect(await store.getItem('zero')).toBe(0)
+            expect(await store.getItem('no')).toBe(false)
+            expect(await store.getItem('empty-string')).toBe('')
+        }
+        expect(calls.filter((c) => c.startsWith('get:'))).toHaveLength(3)
+    })
+
     test('hit in index → one server read, then served from cache', async () => {
         seed('a', { x: 1 })
         expect(await store.getItem('a')).toEqual({ x: 1 })

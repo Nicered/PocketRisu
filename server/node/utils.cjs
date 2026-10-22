@@ -23,6 +23,9 @@ const RisuSaveType = {
     PLUGINS: 9,
     LOADOUTS: 10,
     PLUGIN_STORAGE: 11,
+    // Upstream SaveKV namespace block (`kv:<namespace>`, dae3f6509). PocketRisu
+    // has no SaveKV store; the block is reported and skipped.
+    KV: 12,
 };
 
 // Packr/Unpackr instances
@@ -147,6 +150,25 @@ async function checkCompressionStreams() {
 }
 
 /**
+ * Gunzip with DecompressionStream. The write and close promises are awaited
+ * with the read: on corrupt gzip they reject too, and an unobserved rejection
+ * ends the server process (logs.cjs).
+ * @param {Uint8Array} data
+ * @returns {Promise<Uint8Array>}
+ */
+async function gunzipStream(data) {
+    await checkCompressionStreams();
+    const cs = new DecompressionStream('gzip');
+    const writer = cs.writable.getWriter();
+    const [buf] = await Promise.all([
+        new Response(cs.readable).arrayBuffer(),
+        writer.write(data),
+        writer.close(),
+    ]);
+    return new Uint8Array(buf);
+}
+
+/**
  * Check the header type of saved data
  * @param {Uint8Array} data - The data to check
  * @returns {string|false} - The header type
@@ -212,20 +234,24 @@ class RisuSaveDecoder {
         // `kvGet('remotes/<name>.local.bin')`. When omitted, REMOTE blocks are
         // skipped (the historical behavior) — which loses any characters that
         // were saved as remote blocks by upstream RisuAI or by an earlier
-        // NodeOnly version.
-        const { resolveRemote = null } = options;
+        // NodeOnly version. It also gets the block type the REMOTE block names.
+        // `onBlockError({ name, type, error })` is told about every block that
+        // could not be read or applied and was skipped.
+        const { resolveRemote = null, onBlockError = null } = options;
         let offset = magicRisuSaveHeader.length;
         let db = {};
 
         while (offset < data.length) {
+            let type = -1;
+            let name = '';
             try {
-                const type = data[offset];
+                type = data[offset];
                 const compression = data[offset + 1] === 1;
                 offset += 2;
 
                 const nameLength = data[offset];
                 offset += 1;
-                const name = new TextDecoder().decode(data.subarray(offset, offset + nameLength));
+                name = new TextDecoder().decode(data.subarray(offset, offset + nameLength));
                 offset += nameLength;
 
                 const newArrayBuf = new ArrayBuffer(4);
@@ -238,13 +264,7 @@ class RisuSaveDecoder {
                 offset += length;
 
                 if (compression) {
-                    await checkCompressionStreams();
-                    const cs = new DecompressionStream('gzip');
-                    const writer = cs.writable.getWriter();
-                    writer.write(blockData);
-                    writer.close();
-                    const buf = await new Response(cs.readable).arrayBuffer();
-                    blockData = new Uint8Array(buf);
+                    blockData = await gunzipStream(blockData);
                 }
 
                 this.blocks.push({
@@ -254,6 +274,7 @@ class RisuSaveDecoder {
                     content: new TextDecoder().decode(blockData)
                 });
             } catch (error) {
+                onBlockError?.({ name, type, error });
                 continue;
             }
         }
@@ -299,6 +320,9 @@ class RisuSaveDecoder {
                         break;
                     }
                     case RisuSaveType.PLUGIN_STORAGE: {
+                        // Upstream writes this block empty when there is no
+                        // plugin data (seen in a risuai.xyz account database).
+                        if (this.blocks[key].content === '') break;
                         db.pluginCustomStorage = JSON.parse(this.blocks[key].content);
                         break;
                     }
@@ -314,7 +338,7 @@ class RisuSaveDecoder {
                         // that drops characters saved by upstream RisuAI.
                         if (!resolveRemote) break;
                         const remoteInfo = JSON.parse(this.blocks[key].content);
-                        const resolved = await resolveRemote(remoteInfo.name);
+                        const resolved = await resolveRemote(remoteInfo.name, remoteInfo.type);
                         if (!resolved) {
                             logger.warn(`[RisuSaveDecoder] Remote block ${remoteInfo.name} could not be resolved`);
                             break;
@@ -329,12 +353,17 @@ class RisuSaveDecoder {
                         });
                         break;
                     }
+                    case RisuSaveType.KV: {
+                        logger.warn(`[RisuSaveDecoder] Skipping upstream SaveKV block ${this.blocks[key].name}: not supported`);
+                        break;
+                    }
                     default: {
                         // Not implemented type, skip
                     }
                 }
             } catch (error) {
                 logger.error(`[RisuSaveDecoder] Error processing block ${this.blocks[key].name}:`, error);
+                onBlockError?.({ name: this.blocks[key].name, type: this.blocks[key].type, error });
                 if (this.blocks[key].type === RisuSaveType.ROOT) {
                     throw new Error('Failed to decode root block, cannot proceed with decoding RisuSave data');
                 }
@@ -361,9 +390,12 @@ class RisuSaveDecoder {
  * Decode RisuSave data
  * @param {Uint8Array} data - The data to decode
  * @param {Object} [options] - Decode options
- * @param {(name: string) => Promise<Uint8Array|Buffer|null>} [options.resolveRemote] -
+ * @param {(name: string, type: number) => Promise<Uint8Array|Buffer|null>} [options.resolveRemote] -
  *   Resolver for REMOTE blocks. Only relevant for the "risusave" format; ignored
  *   for legacy/compressed/stream which never contain REMOTE blocks.
+ * @param {(info: { name: string, type: number, error: unknown }) => void} [options.onBlockError] -
+ *   Called for each "risusave" block that was skipped because it could not be
+ *   read or applied.
  * @returns {Promise<Object>} - The decoded database
  */
 async function decodeRisuSave(data, options = {}) {
@@ -385,14 +417,8 @@ async function _decodeRisuSaveInternal(data, options = {}) {
                 data = data.slice(magicHeader.length);
                 return unpackr.decode(data);
             case "stream": {
-                await checkCompressionStreams();
                 data = data.slice(magicStreamCompressedHeader.length);
-                const cs = new DecompressionStream('gzip');
-                const writer = cs.writable.getWriter();
-                writer.write(data);
-                writer.close();
-                const buf = await new Response(cs.readable).arrayBuffer();
-                return unpackr.decode(new Uint8Array(buf));
+                return unpackr.decode(await gunzipStream(data));
             }
             case "risusave": {
                 const decoder = new RisuSaveDecoder();

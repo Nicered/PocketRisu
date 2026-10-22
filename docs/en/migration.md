@@ -4,11 +4,12 @@
 
 # RisuAI Migration Guide
 
-There are three ways to migrate data from an existing RisuAI installation (Web RisuAI, Local RisuAI) to PocketRisu. Choose based on your source environment and data size.
+There are four ways to migrate data from an existing RisuAI installation (Web RisuAI, Local RisuAI) to PocketRisu. Choose based on your source environment and data size.
 
-- [1. Local Backup File (.bin)](#1-local-backup-file-bin) — Works in all environments. The most common method.
-- [2. Save Folder Zip Upload](#2-save-folder-zip-upload) — Local RisuAI, small datasets.
-- [3. Save Folder Direct Copy](#3-save-folder-direct-copy) — Local RisuAI, large datasets.
+- [1. Import from RisuAI Account](#1-import-from-risuai-account) — Web RisuAI with account sync. The server downloads the account data directly.
+- [2. Local Backup File (.bin)](#2-local-backup-file-bin) — Works in all environments. The most common method.
+- [3. Save Folder Zip Upload](#3-save-folder-zip-upload) — Local RisuAI, small datasets.
+- [4. Save Folder Direct Copy](#4-save-folder-direct-copy) — Local RisuAI, large datasets.
 
 
 ## Before You Start
@@ -18,22 +19,41 @@ There are three ways to migrate data from an existing RisuAI installation (Web R
 
 ---
 
-## 1. Local Backup File (.bin)
+## 1. Import from RisuAI Account
+
+The PocketRisu server downloads the data saved in your web RisuAI (risuai.xyz) account directly from RisuAI. It moves the characters, chats, settings and images in the account.
+
+1. **In web RisuAI** (if you have not been using account sync): log in under Settings > Account & Files and turn on "Save Data in Account". If a choice appears, pick "Save Current Data to Account", then type `RISUAI` in the confirmation box. Your current data is uploaded to the account.
+2. **In PocketRisu**: Settings > Data Migration > "Import from RisuAI account", accept RisuAI's Terms of Service and log in.
+3. Check the number of characters, chats and images and the estimated time, then press "Start import".
+4. Until it ends, PocketRisu shows only the import screen. When it ends, your data is replaced and the page reloads by itself.
+
+> ⚠️ The import **replaces all current data in PocketRisu with the account data** (nothing is merged). Back up anything you want to keep first.
+
+- To avoid straining RisuAI's server, one item is downloaded per second. With many images this can take several hours.
+- If the server restarts or the RisuAI login expires, logging in again downloads only what is left.
+- Images inserted into chats (inlays) are stored only in the browser, so they are not imported.
+- Storage in a RisuAI account has a size limit.
+
+
+---
+
+## 2. Local Backup File (.bin)
 
 Export a `.bin` backup file from existing RisuAI, then import it into PocketRisu. Works regardless of the source environment (web / Tauri / Capacitor / local).
 
 1. **In existing RisuAI**: Settings > Backup > "Save Local Backup" to export a `.bin` file.
 2. **In PocketRisu**: Settings > Data Migration > "Import Original Risu Local Backup" to import the `.bin` file.
 
-> ⚠️ **If you use web RisuAI logged in to an account** (your data is synced to the RisuAI server), a file made with "Save Local Backup" has an encrypted database that PocketRisu cannot read. The import is rejected with an explanation. Export it one of these ways instead:
-> - **Log out, then back up** (recommended): Settings > Account > Logout moves your data into the browser (device). "Save Local Backup" then produces a normal backup, assets included.
-> - **Partial Backup**: available while logged in and not encrypted, but it only includes character profile images.
+> ⚠️ **Temporary issue (as of October 2026)**: In the latest web RisuAI (risuai.xyz), the database in a "Save Local Backup" file is encrypted whether or not you are logged in to an account. PocketRisu rejects such a file with an "encrypted backup" message. (Backups made in the RisuAI desktop app or a self-hosted Node server are not affected.) A fix has been requested from RisuAI ([kwaroran/Risuai#1681](https://github.com/kwaroran/Risuai/issues/1681)). Until it is resolved, move your data through web RisuAI's account sync with [1. Import from RisuAI Account](#1-import-from-risuai-account).
+>
+> If you already used account sync ("Save Data in Account") on web RisuAI, your backups are encrypted regardless of this issue. Use method 1 in that case too.
 
 
 
 ---
 
-## 2. Save Folder Zip Upload
+## 3. Save Folder Zip Upload
 
 If you were using Local RisuAI (the Node server version), you can zip your `save` folder and upload it.
 
@@ -41,12 +61,12 @@ If you were using Local RisuAI (the Node server version), you can zip your `save
 2. In PocketRisu, go to Settings > Data Migration > "Import save folder from NodeOnly Risu" accordion.
 3. Upload the zip via "Import from Save Folder (Zip Upload)".
 
-> If the zip file is too large, the upload may fail. In that case, use [3. Save Folder Direct Copy](#3-save-folder-direct-copy).
+> If the zip file is too large, the upload may fail. In that case, use [4. Save Folder Direct Copy](#4-save-folder-direct-copy).
 
 
 ---
 
-## 3. Save Folder Direct Copy
+## 4. Save Folder Direct Copy
 
 Suitable for large datasets (several GB or more). Requires direct filesystem access to the server.
 
@@ -63,10 +83,11 @@ Suitable for large datasets (several GB or more). Requires direct filesystem acc
 
 | Situation                                            | Recommended Method                |
 | ---------------------------------------------------- | --------------------------------- |
-| Migrating from Web RisuAI                            | 1. `.bin` backup                  |
-| Migrating from Local RisuAI, small data              | 2. Zip upload                     |
-| Migrating from Local RisuAI, large data (10GB+)      | 3. Save folder direct copy        |
-| Not sure                                             | 1. `.bin` backup                  |
+| Migrating from Web RisuAI                            | 2. `.bin` backup                  |
+| Migrating from Web RisuAI, backup rejected as encrypted | 1. Import from RisuAI Account |
+| Migrating from Local RisuAI, small data              | 3. Zip upload                     |
+| Migrating from Local RisuAI, large data (10GB+)      | 4. Save folder direct copy        |
+| Not sure                                             | 2. `.bin` backup                  |
 
 
 ---

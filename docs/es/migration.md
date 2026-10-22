@@ -6,11 +6,12 @@
 
 > 🌐 Esta guía está traducida por máquina. Para obtener la información más precisa, consulte la versión en [inglés](../en/migration.md) o [coreano](../ko/migration.md).
 
-Hay tres formas de migrar datos desde una instalación existente de RisuAI (RisuAI Web, RisuAI Local) a PocketRisu. Elija según su entorno de origen y el tamaño de los datos.
+Hay cuatro formas de migrar datos desde una instalación existente de RisuAI (RisuAI Web, RisuAI Local) a PocketRisu. Elija según su entorno de origen y el tamaño de los datos.
 
-- [1. Archivo de copia de seguridad local (.bin)](#1-archivo-de-copia-de-seguridad-local-bin) — Funciona en todos los entornos. El método más común.
-- [2. Subida zip de la carpeta save](#2-subida-zip-de-la-carpeta-save) — RisuAI Local, datos pequeños.
-- [3. Copia directa de la carpeta save](#3-copia-directa-de-la-carpeta-save) — RisuAI Local, datos grandes.
+- [1. Importar desde la cuenta de RisuAI](#1-importar-desde-la-cuenta-de-risuai) — RisuAI Web con sincronización de cuenta. El servidor descarga los datos de la cuenta directamente.
+- [2. Archivo de copia de seguridad local (.bin)](#2-archivo-de-copia-de-seguridad-local-bin) — Funciona en todos los entornos. El método más común.
+- [3. Subida zip de la carpeta save](#3-subida-zip-de-la-carpeta-save) — RisuAI Local, datos pequeños.
+- [4. Copia directa de la carpeta save](#4-copia-directa-de-la-carpeta-save) — RisuAI Local, datos grandes.
 
 
 ## Antes de comenzar
@@ -20,22 +21,41 @@ Hay tres formas de migrar datos desde una instalación existente de RisuAI (Risu
 
 ---
 
-## 1. Archivo de copia de seguridad local (.bin)
+## 1. Importar desde la cuenta de RisuAI
+
+El servidor de PocketRisu descarga directamente de RisuAI los datos guardados en la cuenta de RisuAI web (risuai.xyz). Se trasladan los personajes, chats, ajustes e imágenes de la cuenta.
+
+1. **En RisuAI web** (si aún no usa la sincronización de cuenta): inicie sesión en Configuración > Cuenta & Archivos y active "Guardar Datos en la Cuenta". Si aparece una selección, elija "Guardar Datos Actuales en la Cuenta" y escriba `RISUAI` en el campo de confirmación. Sus datos actuales se suben a la cuenta.
+2. **En PocketRisu**: en Configuración > Migración de datos > "Importar desde la cuenta de RisuAI", acepte los términos de servicio de RisuAI e inicie sesión.
+3. Revise el número de personajes, chats e imágenes y el tiempo estimado, y pulse "Iniciar importación".
+4. Hasta que termine, PocketRisu solo muestra la pantalla de importación. Al terminar, los datos se reemplazan y la página se recarga sola.
+
+> ⚠️ La importación **reemplaza todos los datos actuales de PocketRisu por los de la cuenta** (no los combina). Si hay datos que quiera conservar, haga antes una copia de seguridad.
+
+- Para no sobrecargar el servidor de RisuAI, se descarga un elemento por segundo. Con muchas imágenes puede tardar varias horas.
+- Si el servidor se reinicia o la sesión de RisuAI caduca, al volver a iniciar sesión solo se descarga lo que falta.
+- Las imágenes insertadas en los chats (inlays) se guardan solo en el navegador, por lo que no se importan.
+- El almacenamiento de una cuenta de RisuAI tiene un límite de tamaño.
+
+
+---
+
+## 2. Archivo de copia de seguridad local (.bin)
 
 Exporte un archivo de copia de seguridad `.bin` desde RisuAI existente y luego impórtelo en PocketRisu. Funciona independientemente del entorno de origen (web / Tauri / Capacitor / local).
 
 1. **En RisuAI existente**: Configuración > Copia de seguridad > "Guardar copia local" para exportar un archivo `.bin`.
 2. **En PocketRisu**: Configuración > Migración de datos > "Importar copia local de Risu original" para importar el archivo `.bin`.
 
-> ⚠️ **Si usa RisuAI web con una cuenta iniciada** (sus datos se sincronizan con el servidor de RisuAI), el archivo creado con "Guardar copia local" tiene la base de datos cifrada y PocketRisu no puede leerla. La importación se rechaza con una explicación. Exporte de una de estas formas:
-> - **Cerrar sesión y luego hacer la copia** (recomendado): Configuración > Cuenta > Cerrar sesión mueve sus datos al navegador (dispositivo). Después, "Guardar copia local" genera una copia normal, con recursos incluidos.
-> - **Copia parcial**: disponible con la sesión iniciada y sin cifrar, pero solo incluye las imágenes de perfil de los personajes.
+> ⚠️ **Problema temporal (a octubre de 2026)**: En la versión actual de RisuAI web (risuai.xyz), la base de datos de un archivo creado con "Guardar copia local" se cifra tanto si ha iniciado sesión en una cuenta como si no. PocketRisu rechaza ese archivo con un aviso de copia cifrada. (Las copias creadas en la aplicación de escritorio de RisuAI o en un servidor Node propio no se ven afectadas.) Se ha solicitado una corrección a RisuAI ([kwaroran/Risuai#1681](https://github.com/kwaroran/Risuai/issues/1681)). Hasta que se resuelva, traslade sus datos mediante la sincronización de cuenta de RisuAI web con [1. Importar desde la cuenta de RisuAI](#1-importar-desde-la-cuenta-de-risuai).
+>
+> Si ya usaba la sincronización de cuenta ("Guardar Datos en la Cuenta") en RisuAI web, sus copias están cifradas independientemente de este problema. Use también el método 1 en ese caso.
 
 
 
 ---
 
-## 2. Subida zip de la carpeta save
+## 3. Subida zip de la carpeta save
 
 Si estaba usando RisuAI Local (la versión de servidor Node), puede comprimir su carpeta `save` y subirla.
 
@@ -43,12 +63,12 @@ Si estaba usando RisuAI Local (la versión de servidor Node), puede comprimir su
 2. En PocketRisu, vaya a Configuración > Migración de datos > acordeón "Importar carpeta save de NodeOnly Risu".
 3. Suba el zip a través de "Importar desde carpeta save (Subir Zip)".
 
-> Si el archivo zip es demasiado grande, la subida puede fallar. En ese caso, use [3. Copia directa de la carpeta save](#3-copia-directa-de-la-carpeta-save).
+> Si el archivo zip es demasiado grande, la subida puede fallar. En ese caso, use [4. Copia directa de la carpeta save](#4-copia-directa-de-la-carpeta-save).
 
 
 ---
 
-## 3. Copia directa de la carpeta save
+## 4. Copia directa de la carpeta save
 
 Apropiado para grandes conjuntos de datos (varios GB o más). Requiere acceso directo al sistema de archivos del servidor.
 
@@ -65,10 +85,11 @@ Apropiado para grandes conjuntos de datos (varios GB o más). Requiere acceso di
 
 | Situación                                                       | Método recomendado                       |
 | --------------------------------------------------------------- | ---------------------------------------- |
-| Migrar desde RisuAI Web                                         | 1. Copia `.bin`                          |
-| Migrar desde RisuAI Local, datos pequeños                       | 2. Subida zip                            |
-| Migrar desde RisuAI Local, datos grandes (10GB+)                | 3. Copia directa de la carpeta save      |
-| No estoy seguro                                                 | 1. Copia `.bin`                          |
+| Migrar desde RisuAI Web                                         | 2. Copia `.bin`                          |
+| Migrar desde RisuAI Web, la copia se rechaza por estar cifrada | 1. Importar desde la cuenta de RisuAI |
+| Migrar desde RisuAI Local, datos pequeños                       | 3. Subida zip                            |
+| Migrar desde RisuAI Local, datos grandes (10GB+)                | 4. Copia directa de la carpeta save      |
+| No estoy seguro                                                 | 2. Copia `.bin`                          |
 
 
 ---

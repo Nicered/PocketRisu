@@ -929,6 +929,7 @@
             <ul class="list-disc pl-5">
                 <li>{language.risuTosScopeRealm}</li>
                 <li>{language.risuTosScopeMcp}</li>
+                <li>{language.risuTosScopeAccountImport}</li>
             </ul>
         </div>
         <div class="flex flex-wrap gap-x-4 gap-y-1">
