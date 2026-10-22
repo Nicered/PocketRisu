@@ -22,6 +22,13 @@ const REFLOW_CLASS = 'composer-plugin-reflow'
 const GAP_PX = 8
 const MAX_AREA_RATIO = 0.25
 const RECHECK_MS = 400
+// Hit-test spacing. A fixed number of sample rows leaves gaps that grow with
+// the composer, and a small icon fits between them once a few lines of text
+// have made it tall, so sample at a fixed pitch instead.
+const SAMPLE_STEP_PX = 16
+const MAX_SAMPLES_PER_AXIS = 40
+// Cap on elements walked per pass when looking for overlays outside the app.
+const MAX_SCANNED_ELEMENTS = 600
 // Restoring right on focusout would yank a lifted button back down between the
 // tap that blurs the textarea and the click it should receive.
 const RESTORE_DELAY_MS = 350
@@ -30,6 +37,10 @@ type Lifted = { prevTranslate: string }
 
 export function liftOverlaysOffComposer(node: HTMLElement) {
     const lifted = new Map<HTMLElement, Lifted>()
+    // Floaters already found covering the composer. They are re-checked by
+    // their rects on every pass, so one stays lifted even if it later falls
+    // between hit-test samples.
+    const known = new Set<HTMLElement>()
     let active = false
     let timer: ReturnType<typeof setInterval> | null = null
     let restoreTimer: ReturnType<typeof setTimeout> | null = null
@@ -66,9 +77,44 @@ export function liftOverlaysOffComposer(node: HTMLElement) {
         const maxArea = vw * vh * MAX_AREA_RATIO
 
         const covering = new Set<HTMLElement>()
-        const cols = 10
-        const ys = [rect.top + 4, rect.top + rect.height / 2, rect.bottom - 4]
-        for (const y of ys) {
+        for (const el of known) {
+            if (!el.isConnected || getComputedStyle(el).position !== 'fixed') { known.delete(el); continue }
+            const r = el.getBoundingClientRect()
+            if (r.right > rect.left && r.left < rect.right && r.bottom > rect.top && r.top < rect.bottom) covering.add(el)
+        }
+
+        // Plugin overlays usually hang off <body> outside the app root. Find
+        // them by rect overlap too: hit-testing alone has missed them on mobile
+        // browsers whose elementsFromPoint disagrees with the rects while the
+        // keyboard is open.
+        const overlaps = (r: DOMRect) => r.width > 0 && r.height > 0
+            && r.right > rect.left && r.left < rect.right && r.bottom > rect.top && r.top < rect.bottom
+        let budget = MAX_SCANNED_ELEMENTS
+        // Returns whether it picked something in el's subtree.
+        const scan = (el: Element): boolean => {
+            if (--budget < 0 || !(el instanceof HTMLElement)) return false
+            const cs = getComputedStyle(el)
+            if (cs.display === 'none') return false
+            let picked = false
+            for (const child of el.children) picked = scan(child) || picked
+            // Prefer the innermost fixed element: a translate on a fixed
+            // ancestor would become the containing block of the fixed ones
+            // inside it and throw them off.
+            if (!picked && cs.position === 'fixed' && overlaps(el.getBoundingClientRect())) {
+                covering.add(el)
+                picked = true
+            }
+            return picked
+        }
+        for (const top of document.body.children) {
+            if (top.contains(node) || top.tagName === 'SCRIPT' || top.tagName === 'STYLE') continue
+            scan(top)
+        }
+
+        const rows = Math.min(MAX_SAMPLES_PER_AXIS, Math.max(3, Math.ceil(rect.height / SAMPLE_STEP_PX)))
+        const cols = Math.min(MAX_SAMPLES_PER_AXIS, Math.max(10, Math.ceil(rect.width / SAMPLE_STEP_PX)))
+        for (let j = 0; j < rows; j++) {
+            const y = rect.top + (rect.height * (j + 0.5)) / rows
             if (y < 0 || y >= vh) continue
             for (let i = 0; i < cols; i++) {
                 const x = rect.left + (rect.width * (i + 0.5)) / cols
@@ -88,6 +134,7 @@ export function liftOverlaysOffComposer(node: HTMLElement) {
             if (r.width * r.height > maxArea) continue
             const dy = r.bottom - rect.top + GAP_PX
             if (dy <= 0) continue
+            known.add(el)
             lifted.set(el, { prevTranslate: el.style.translate })
             el.style.translate = `0 ${-Math.round(dy)}px`
         }
@@ -116,6 +163,7 @@ export function liftOverlaysOffComposer(node: HTMLElement) {
         window.visualViewport?.removeEventListener('scroll', schedule)
         window.removeEventListener('resize', schedule)
         restoreAll()
+        known.clear()
     }
 
     const onFocusIn = (e: FocusEvent) => {
