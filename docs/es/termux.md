@@ -115,15 +115,29 @@ Libere con: `termux-wake-unlock`
 
 ## 5. Actualización
 
-Desde el directorio de PocketRisu:
+Detenga el servidor en ejecución con `Ctrl + C` y luego ejecute:
 
 ```bash
-cd ~/PocketRisu
-git pull
-NODE_OPTIONS="--max-old-space-size=2048" pnpm build
+cd ~/PocketRisu && \
+  git pull --ff-only && \
+  GYP_DEFINES="android_ndk_path=''" pnpm install --frozen-lockfile && \
+  NODE_OPTIONS="--max-old-space-size=2048" pnpm build
 ```
 
-Si las dependencias cambiaron, `pnpm install` se ejecuta automáticamente como parte de la compilación. Reinicie el servidor cuando se complete la compilación.
+Cada paso solo se ejecuta si el anterior tuvo éxito, así que el comando se detiene en el primer error en lugar de volver a compilar la versión anterior sin el código actualizado. Cuando termine la compilación, vuelva a iniciar el servidor con `node server/node/server.cjs`.
+
+- `pnpm install` aplica los cambios de dependencias de la nueva versión. Ejecútelo en cada actualización; termina de inmediato si no hubo cambios.
+- `GYP_DEFINES` es el mismo ajuste de Termux que usa el script de compilación. Es necesario cuando se recompilan módulos nativos como `better-sqlite3`.
+
+### Si `git pull` falla
+
+Si `git pull` se detiene con `Your local changes to the following files would be overwritten by merge` o `Not possible to fast-forward`, restablezca el código fuente a la última versión con el siguiente comando y vuelva a ejecutar el comando de actualización anterior:
+
+```bash
+cd ~/PocketRisu && git fetch origin && git reset --hard origin/main
+```
+
+Las carpetas `save/` y `backups/` no están controladas por git, por lo que los chats, personajes y ajustes se conservan. Se descartan los cambios que haya hecho en los archivos fuente (un puerto modificado, dependencias cambiadas con `pnpm add`, etc.).
 
 
 ---

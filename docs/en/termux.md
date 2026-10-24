@@ -113,15 +113,29 @@ Release with: `termux-wake-unlock`
 
 ## 5. Update
 
-From the PocketRisu directory:
+Stop the running server with `Ctrl + C`, then run:
 
 ```bash
-cd ~/PocketRisu
-git pull
-NODE_OPTIONS="--max-old-space-size=2048" pnpm build
+cd ~/PocketRisu && \
+  git pull --ff-only && \
+  GYP_DEFINES="android_ndk_path=''" pnpm install --frozen-lockfile && \
+  NODE_OPTIONS="--max-old-space-size=2048" pnpm build
 ```
 
-If dependencies changed, `pnpm install` runs automatically as part of the build. Restart the server when the build completes.
+Each step runs only if the previous one succeeded, so the command stops at the first error instead of rebuilding the old version without updated sources. When the build completes, start the server again with `node server/node/server.cjs`.
+
+- `pnpm install` applies dependency changes in the new version. Run it on every update; it finishes right away when nothing changed.
+- `GYP_DEFINES` is the same Termux setting the build script uses. It is needed when native modules such as `better-sqlite3` are recompiled.
+
+### If `git pull` fails
+
+If `git pull` stops with `Your local changes to the following files would be overwritten by merge` or `Not possible to fast-forward`, reset the source to the latest version with the following command, then run the update command above again:
+
+```bash
+cd ~/PocketRisu && git fetch origin && git reset --hard origin/main
+```
+
+The `save/` and `backups/` folders are not tracked by git, so chats, characters, and settings stay as they are. Any edits you made to source files (a changed port, dependencies changed with `pnpm add`, and so on) are discarded.
 
 
 ---

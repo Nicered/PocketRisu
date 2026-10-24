@@ -9,13 +9,16 @@
 // every step shrinks the lag from the full URL-bar height to a few px.
 //
 // Deliberately skipped:
-// - while the on-screen keyboard is open over a focused editable element: the
-//   keyboard also shrinks the visual viewport, and the platform keyboard path
-//   (pan/lift, see the rootScrollGuard removal in 37ef6e3b) must keep its
-//   native behavior. Chrome and Safari leave window.innerHeight (the layout
-//   viewport) unchanged for the keyboard, so a large gap below it means the
-//   keyboard is up; browser toolbars move innerHeight too and stay under the
-//   threshold.
+// - while the on-screen keyboard is open: the keyboard also shrinks the visual
+//   viewport, and the platform keyboard path (pan/lift, see the rootScrollGuard
+//   removal in 37ef6e3b) must keep its native behavior. Chrome leaves
+//   window.innerHeight (the layout viewport) unchanged for the keyboard, but
+//   iOS Safari shrinks it by the pan that lifts the focused input
+//   (vv.offsetTop; measured on iOS 18.4: innerHeight 678→410 with offsetTop
+//   268 and vv.height 410). Adding the offset back makes a large gap mean the
+//   keyboard is up on both; browser toolbars move innerHeight too and stay
+//   under the threshold. Focus is not required, so the focusout re-measure
+//   below also waits while the keyboard is still closing.
 // - while pinch-zoomed (scale != 1): vv.height is in visual px there, not a
 //   layout size.
 //
@@ -39,7 +42,7 @@ export function installDynamicViewportHeight() {
     const apply = () => {
         raf = 0
         if (Math.abs(vv.scale - 1) > 0.01) return
-        if (isEditable(document.activeElement) && window.innerHeight - vv.height > KEYBOARD_MIN_HEIGHT) return
+        if (window.innerHeight + vv.offsetTop - vv.height > KEYBOARD_MIN_HEIGHT) return
         document.documentElement.style.setProperty('--risu-height-size', `${Math.round(vv.height)}px`)
     }
     const schedule = () => { if (!raf) raf = requestAnimationFrame(apply) }

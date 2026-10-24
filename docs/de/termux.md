@@ -115,15 +115,29 @@ Freigeben mit: `termux-wake-unlock`
 
 ## 5. Aktualisieren
 
-Aus dem PocketRisu-Verzeichnis:
+Beenden Sie den laufenden Server mit `Ctrl + C` und führen Sie dann Folgendes aus:
 
 ```bash
-cd ~/PocketRisu
-git pull
-NODE_OPTIONS="--max-old-space-size=2048" pnpm build
+cd ~/PocketRisu && \
+  git pull --ff-only && \
+  GYP_DEFINES="android_ndk_path=''" pnpm install --frozen-lockfile && \
+  NODE_OPTIONS="--max-old-space-size=2048" pnpm build
 ```
 
-Wenn sich Abhängigkeiten geändert haben, wird `pnpm install` automatisch als Teil des Builds ausgeführt. Starten Sie den Server neu, sobald der Build abgeschlossen ist.
+Jeder Schritt wird nur ausgeführt, wenn der vorherige erfolgreich war. Bei einem Fehler bricht der Befehl an dieser Stelle ab, statt die alte Version ohne aktualisierten Quellcode erneut zu bauen. Starten Sie den Server nach Abschluss des Builds wieder mit `node server/node/server.cjs`.
+
+- `pnpm install` übernimmt geänderte Abhängigkeiten der neuen Version. Führen Sie es bei jedem Update aus; ohne Änderungen ist es sofort fertig.
+- `GYP_DEFINES` ist dieselbe Termux-Einstellung, die das Build-Skript verwendet. Sie wird benötigt, wenn native Module wie `better-sqlite3` neu kompiliert werden.
+
+### Wenn `git pull` fehlschlägt
+
+Bricht `git pull` mit `Your local changes to the following files would be overwritten by merge` oder `Not possible to fast-forward` ab, setzen Sie den Quellcode mit folgendem Befehl auf die neueste Version zurück und führen Sie den obigen Update-Befehl erneut aus:
+
+```bash
+cd ~/PocketRisu && git fetch origin && git reset --hard origin/main
+```
+
+Die Ordner `save/` und `backups/` werden nicht von git verwaltet, daher bleiben Chats, Charaktere und Einstellungen erhalten. Eigene Änderungen an Quelldateien (z. B. ein geänderter Port oder mit `pnpm add` geänderte Abhängigkeiten) gehen dabei verloren.
 
 
 ---

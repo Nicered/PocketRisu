@@ -115,15 +115,29 @@ Giải phóng bằng: `termux-wake-unlock`
 
 ## 5. Cập nhật
 
-Từ thư mục PocketRisu:
+Dừng máy chủ đang chạy bằng `Ctrl + C`, sau đó chạy:
 
 ```bash
-cd ~/PocketRisu
-git pull
-NODE_OPTIONS="--max-old-space-size=2048" pnpm build
+cd ~/PocketRisu && \
+  git pull --ff-only && \
+  GYP_DEFINES="android_ndk_path=''" pnpm install --frozen-lockfile && \
+  NODE_OPTIONS="--max-old-space-size=2048" pnpm build
 ```
 
-Nếu các phụ thuộc thay đổi, `pnpm install` sẽ tự động chạy như một phần của quá trình xây dựng. Khởi động lại máy chủ khi quá trình xây dựng hoàn tất.
+Mỗi bước chỉ chạy khi bước trước thành công, nên lệnh sẽ dừng ngay tại lỗi đầu tiên thay vì xây dựng lại phiên bản cũ khi mã nguồn chưa được cập nhật. Khi quá trình xây dựng hoàn tất, khởi động lại máy chủ bằng `node server/node/server.cjs`.
+
+- `pnpm install` áp dụng các thay đổi phụ thuộc trong phiên bản mới. Hãy chạy lệnh này mỗi lần cập nhật; nếu không có thay đổi, lệnh sẽ kết thúc ngay.
+- `GYP_DEFINES` là thiết lập Termux giống với tập lệnh xây dựng. Thiết lập này cần thiết khi biên dịch lại các module gốc như `better-sqlite3`.
+
+### Nếu `git pull` thất bại
+
+Nếu `git pull` dừng với `Your local changes to the following files would be overwritten by merge` hoặc `Not possible to fast-forward`, hãy đặt lại mã nguồn về phiên bản mới nhất bằng lệnh sau, rồi chạy lại lệnh cập nhật ở trên:
+
+```bash
+cd ~/PocketRisu && git fetch origin && git reset --hard origin/main
+```
+
+Thư mục `save/` và `backups/` không do git quản lý, nên cuộc trò chuyện, nhân vật và cài đặt vẫn được giữ nguyên. Các chỉnh sửa bạn đã thực hiện trên tệp mã nguồn (như đổi cổng, phụ thuộc thay đổi bằng `pnpm add`, v.v.) sẽ bị hủy.
 
 
 ---

@@ -115,15 +115,29 @@ Termux 通知列會顯示喚醒鎖指示器,即使螢幕關閉伺服器也會繼
 
 ## 5. 更新
 
-在 PocketRisu 目錄下執行:
+先使用 `Ctrl + C` 停止執行中的伺服器,然後執行:
 
 ```bash
-cd ~/PocketRisu
-git pull
-NODE_OPTIONS="--max-old-space-size=2048" pnpm build
+cd ~/PocketRisu && \
+  git pull --ff-only && \
+  GYP_DEFINES="android_ndk_path=''" pnpm install --frozen-lockfile && \
+  NODE_OPTIONS="--max-old-space-size=2048" pnpm build
 ```
 
-如果相依套件發生變更,`pnpm install` 會作為建置的一部分自動執行。建置完成後請重新啟動伺服器。
+每個步驟只有在前一步成功後才會執行。一旦出錯,指令會在該處停止,而不會在原始碼未更新的情況下重新建置舊版本。建置完成後,請使用 `node server/node/server.cjs` 重新啟動伺服器。
+
+- `pnpm install` 會套用新版本中的相依套件變更。每次更新都需要執行,沒有變更時會立即完成。
+- `GYP_DEFINES` 與建置腳本使用的 Termux 設定相同,重新編譯 `better-sqlite3` 等原生模組時需要它。
+
+### `git pull` 失敗時
+
+如果 `git pull` 因 `Your local changes to the following files would be overwritten by merge` 或 `Not possible to fast-forward` 而停止,請先使用以下指令將原始碼重設為最新版本,再重新執行上面的更新指令:
+
+```bash
+cd ~/PocketRisu && git fetch origin && git reset --hard origin/main
+```
+
+`save/` 與 `backups/` 資料夾不受 git 管理,因此聊天、角色與設定等資料會保留。但對原始檔所做的修改(例如變更連接埠、透過 `pnpm add` 變更的相依套件等)會被捨棄。
 
 
 ---

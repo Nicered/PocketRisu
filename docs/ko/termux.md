@@ -113,15 +113,29 @@ Termux 알림 영역에 wake lock 상태가 표시되며, 폰 화면이 꺼져�
 
 ## 5. 업데이트
 
-PocketRisu 디렉터리에서 다음을 실행합니다.
+실행 중인 서버를 `Ctrl + C`로 종료한 뒤 다음을 실행합니다.
 
 ```bash
-cd ~/PocketRisu
-git pull
-NODE_OPTIONS="--max-old-space-size=2048" pnpm build
+cd ~/PocketRisu && \
+  git pull --ff-only && \
+  GYP_DEFINES="android_ndk_path=''" pnpm install --frozen-lockfile && \
+  NODE_OPTIONS="--max-old-space-size=2048" pnpm build
 ```
 
-코드 변경에 따라 새 의존성이 필요한 경우 `pnpm install`이 자동 실행됩니다. 빌드가 끝나면 서버를 재시작합니다.
+각 단계는 앞 단계가 성공했을 때만 실행됩니다. 오류가 나면 그 자리에서 멈추므로, 소스가 갱신되지 않은 채 이전 버전을 다시 빌드하는 일이 없습니다. 빌드가 끝나면 `node server/node/server.cjs`로 서버를 다시 실행합니다.
+
+- `pnpm install`은 새 버전에서 바뀐 의존성을 반영합니다. 업데이트할 때마다 실행하며, 바뀐 것이 없으면 바로 끝납니다.
+- `GYP_DEFINES`는 빌드 스크립트와 같은 Termux용 설정으로, `better-sqlite3` 같은 네이티브 모듈을 다시 컴파일할 때 필요합니다.
+
+### `git pull`이 실패하는 경우
+
+`git pull`이 `Your local changes to the following files would be overwritten by merge` 또는 `Not possible to fast-forward` 오류로 멈췄다면, 다음 명령으로 소스를 최신 버전에 맞춘 뒤 위 업데이트 명령을 다시 실행합니다.
+
+```bash
+cd ~/PocketRisu && git fetch origin && git reset --hard origin/main
+```
+
+`save/`, `backups/` 폴더는 git이 관리하지 않으므로 채팅, 캐릭터, 설정 데이터는 그대로 남습니다. 대신 소스 파일을 직접 고친 내용(포트 변경, `pnpm add`로 바꾼 의존성 등)은 사라집니다.
 
 
 ---
